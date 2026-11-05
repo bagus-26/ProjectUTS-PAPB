@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Miscellaneous
 *.class
 *.log
@@ -46,3 +47,42 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+=======
+# OS dan editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.sublime-workspace
+
+# Laravel
+backend/vendor/
+backend/node_modules/
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/storage/*.key
+backend/storage/logs/*.log
+backend/public/build/
+backend/public/hot
+backend/.phpunit.cache/
+backend/.phpunit.result.cache
+
+# Flutter
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/ios/Pods/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+*.iml
+
+# Berkas sementara
+*.tmp
+*.bak
+>>>>>>> d9ff59d422df6b2b74171e37a8e8c35d50045f87
