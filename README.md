@@ -1,5 +1,5 @@
 <<<<<<< HEAD
-# projek_makanyukk
+# projek_makanyuk
 
 A new Flutter project.
 
@@ -175,4 +175,4 @@ Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak 
 - Skeleton Laravel sudah memuat pembungkus respons, middleware `ForceJson` dan `PelangganStatis`, handler exception global, dan 16 route dengan controller stub (membalas 501 sampai pemiliknya mengisi).
 - Inti Flutter sudah memuat `Konfigurasi`, `LayananApi` bertimeout 10 detik, exception bertipe, dan enum `KeadaanMuat`. Halaman uji sambung sementara di `main.dart` akan diganti `HalamanKatalog` oleh A4-02.
 - Migrasi domain, seeder, dan seluruh endpoint diisi A1–A3. Model Dart dan halaman diisi A4–A5.
->>>>>>> d9ff59d422df6b2b74171e37a8e8c35d50045f87
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
