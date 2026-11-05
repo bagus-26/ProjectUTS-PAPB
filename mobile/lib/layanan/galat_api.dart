@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /// Klasifikasi 5 jenis galat sesuai spesifikasi rubrik Kriteria 6 UTS
 enum JenisGalat {
   /// Server mati atau mode pesawat (SocketException)
@@ -103,8 +104,48 @@ class GalatApi implements Exception {
       jenis: JenisGalat.umum,
     );
   }
+=======
+class GalatApi implements Exception {
+  const GalatApi(this.pesan);
+
+  final String pesan;
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
 
   @override
   String toString() => pesan;
 }
 
+<<<<<<< HEAD
+=======
+class GalatSambungan extends GalatApi {
+  const GalatSambungan() : super('Sambungan ke server gagal.');
+}
+
+class GalatBatasWaktu extends GalatApi {
+  const GalatBatasWaktu() : super('Server tidak membalas. Silakan coba lagi.');
+}
+
+class GalatValidasi extends GalatApi {
+  const GalatValidasi(super.pesan, this.errors);
+
+  final Map<String, List<String>> errors;
+}
+
+class GalatBentrok extends GalatApi {
+  const GalatBentrok(super.pesan, this.data);
+
+  final Map<String, dynamic>? data;
+}
+
+class GalatServer extends GalatApi {
+  const GalatServer() : super('Terjadi kesalahan pada server.');
+}
+
+class GalatTidakDitemukan extends GalatApi {
+  const GalatTidakDitemukan() : super('Data tidak ditemukan.');
+}
+
+class GalatUmum extends GalatApi {
+  const GalatUmum(super.pesan);
+}
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
