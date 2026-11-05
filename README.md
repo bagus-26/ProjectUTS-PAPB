@@ -8,10 +8,10 @@ Dokumen sumber: [`docs/PRD.md`](docs/PRD.md). Kontrak API ada di Bagian 6 dan su
 
 | Kode | Nama | NIM | Peran |
 |---|---|---|---|
-| PM | `[nama PM]` | `[NIM]` | Project Manager, fondasi backend & Flutter, integrasi, README |
-| A1 | `[nama]` | `[NIM]` | Backend: basis data, seeder, Produk |
-| A2 | `[nama]` | `[NIM]` | Backend: Keranjang, Checkout, transaksi |
-| A3 | `[nama]` | `[NIM]` | Backend: Pesanan, Kurir, status, dokumen API + Postman |
+| PM | `Bagus Artandyo` | `24102029` | Project Manager, fondasi backend & Flutter, integrasi, README |
+| A1 | `Adhiyatma Pandu Hermansyah` | `24102002` | Backend: basis data, seeder, Produk |
+| A2 | `Nurul Maghfiroh ` | `24102051` | Backend: Keranjang, Checkout, transaksi |
+| A3 | `E` | `[NIM]` | Backend: Pesanan, Kurir, status, dokumen API + Postman |
 | A4 | `[nama]` | `[NIM]` | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
 | A5 | `[nama]` | `[NIM]` | Flutter: Keranjang, Checkout, Rincian Pesanan |
 
