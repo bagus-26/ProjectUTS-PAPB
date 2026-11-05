@@ -45,9 +45,7 @@ class _HalamanUtamaState extends State<HalamanUtama> {
         saatBukaKeranjang: _bukaKeranjang,
       ),
       const HalamanRiwayatPesanan(),
-      HalamanMenuFavorit(
-        saatPilihMenu: () => _pindahKeTab(0),
-      ),
+      const HalamanMenuFavorit(),
       const HalamanProfil(),
     ];
 
