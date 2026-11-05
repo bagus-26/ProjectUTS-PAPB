@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /// Keadaan layar untuk penanganan pemanggilan data API
 /// Sesuai spesifikasi UTS PAPB & Sistem Terdistribusi (Bagian 4 & 6)
 enum KeadaanMuat {
@@ -14,3 +15,6 @@ enum KeadaanMuat {
   galat,
 }
 
+=======
+enum KeadaanMuat { memuat, berhasil, kosong, galat }
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
