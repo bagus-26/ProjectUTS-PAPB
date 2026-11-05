@@ -1,4 +1,28 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
+import 'package:flutter/services.dart';
+
+import 'halaman/halaman_utama.dart';
+import 'umum/tema_warna.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
+  runApp(const AplikasiMakanYuk());
+}
+
+/// Alias untuk kompatibilitas uji bawaan
+typedef MyApp = AplikasiMakanYuk;
+
+/// Root widget aplikasi MakanYuk! (Domain Makanan & Minuman Siap Saji - Kelompok 1)
+class AplikasiMakanYuk extends StatelessWidget {
+  const AplikasiMakanYuk({super.key});
+=======
 
 import 'konfigurasi/konfigurasi.dart';
 import 'layanan/galat_api.dart';
@@ -10,10 +34,31 @@ void main() {
 
 class AplikasiWarung extends StatelessWidget {
   const AplikasiWarung({super.key});
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+<<<<<<< HEAD
+      title: 'MakanYuk!',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: TemaWarna.latarKrem,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: TemaWarna.cokelatUtama,
+          primary: TemaWarna.cokelatUtama,
+          surface: TemaWarna.latarKrem,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: TemaWarna.latarKrem,
+          foregroundColor: TemaWarna.teksUtama,
+          elevation: 0,
+        ),
+        fontFamily: 'Roboto',
+      ),
+      home: const HalamanUtama(),
+=======
       title: 'Warung Kelompok 1',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -92,6 +137,7 @@ class _HalamanUjiSambungState extends State<HalamanUjiSambung> {
           ],
         ),
       ),
+>>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
     );
   }
 }
