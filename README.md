@@ -8,12 +8,12 @@ Dokumen sumber: [`docs/PRD.md`](docs/PRD.md). Kontrak API ada di Bagian 6 dan su
 
 | Kode | Nama | NIM | Peran |
 |---|---|---|---|
-| PM | `Bagus Artandyo` | `24102029` | Project Manager, fondasi backend & Flutter, integrasi, README |
+| PM | `Bagus Artandyo Witjaksono` | `24102029` | Project Manager(Ketua Kelompok), fondasi backend & Flutter, integrasi, README |
 | A1 | `Adhiyatma Pandu Hermansyah` | `24102002` | Backend: basis data, seeder, Produk |
 | A2 | `Nurul Maghfiroh ` | `24102051` | Backend: Keranjang, Checkout, transaksi |
-| A3 | `E` | `[NIM]` | Backend: Pesanan, Kurir, status, dokumen API + Postman |
-| A4 | `[nama]` | `[NIM]` | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
-| A5 | `[nama]` | `[NIM]` | Flutter: Keranjang, Checkout, Rincian Pesanan |
+| A3 | `Alifia Az-Zahrah Murtidewi` | `24102004` | UI/UX Flutter: Desain UI/UX Slicing Bagian Halaman Makanan Dan Minuman|
+| A4 | `Erika Salsabila Intania` | `24102009` | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat FIx Halaman Config |
+| A5 | `Mir'atus Sani Fadillah` | `24102047` | Flutter: Keranjang, Checkout, Rincian Pesanan , Widget|
 
 ## 2. Domain dan Aturan Khas
 
