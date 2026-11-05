@@ -2,78 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
+import '../model/produk.dart';
 import '../umum/keadaan_muat.dart';
+import '../umum/tema_warna.dart';
+import '../widget/bilah_pencarian.dart';
+import '../widget/kartu_produk.dart';
+import '../widget/tampilan_galat.dart';
+import '../widget/tampilan_kosong.dart';
+import '../widget/tampilan_muat.dart';
+import 'halaman_rincian_produk.dart';
 
-const Color _warnaCokelat = Color(0xFF6D4C41);
-const Color _warnaKrem = Color(0xFFFFF8F1);
-const Color _warnaKremTua = Color(0xFFF2E4D5);
-
-//tolong dibaca dulu bagian kodenya, ini sebagian dari infrastruktur aplikasi
-
-int? _idProduk(Map<String, dynamic> produk) {
-  final nilai = produk['id'];
-
-  if (nilai is int) {
-    return nilai;
-  }
-
-  return int.tryParse(nilai?.toString() ?? '');
-}
-
-String _teks(dynamic nilai, [String cadangan = '']) {
-  if (nilai == null) {
-    return cadangan;
-  }
-
-  final hasil = nilai.toString().trim();
-
-  return hasil.isEmpty ? cadangan : hasil;
-}
-
-int _angka(dynamic nilai) {
-  if (nilai is int) {
-    return nilai;
-  }
-
-  if (nilai is num) {
-    return nilai.toInt();
-  }
-
-  return int.tryParse(nilai?.toString() ?? '') ?? 0;
-}
-
-String _formatRupiah(int nilai) {
-  final teks = nilai.toString();
-  final hasil = StringBuffer();
-
-  for (var i = 0; i < teks.length; i++) {
-    if (i > 0 && (teks.length - i) % 3 == 0) {
-      hasil.write('.');
-    }
-
-    hasil.write(teks[i]);
-  }
-
-  return 'Rp $hasil';
-}
-
-Map<String, dynamic> _peta(dynamic nilai) {
-  if (nilai is Map<String, dynamic>) {
-    return nilai;
-  }
-
-  if (nilai is Map) {
-    return Map<String, dynamic>.from(nilai);
-  }
-
-  return <String, dynamic>{};
-}
-
+/// Penyimpanan Favorit Lokal di Memori Klien
 class FavoritLokal {
   FavoritLokal._();
 
-  static final Map<int, Map<String, dynamic>> _tersimpan =
-      <int, Map<String, dynamic>>{};
+  static final Map<int, Map<String, dynamic>> _tersimpan = {};
 
   static List<Map<String, dynamic>> get semua =>
       _tersimpan.values.toList(growable: false);
@@ -81,11 +24,10 @@ class FavoritLokal {
   static bool berisi(int id) => _tersimpan.containsKey(id);
 
   static void alihkan(Map<String, dynamic> produk) {
-    final id = _idProduk(produk);
+    final idRaw = produk['id'];
+    final id = idRaw is int ? idRaw : int.tryParse(idRaw?.toString() ?? '');
 
-    if (id == null) {
-      return;
-    }
+    if (id == null) return;
 
     if (_tersimpan.containsKey(id)) {
       _tersimpan.remove(id);
@@ -99,15 +41,24 @@ class FavoritLokal {
   }
 }
 
+/// Halaman Menu Favorit (MakanYuk! - Kelompok 1)
+/// Sesuai UI rancangan Screenshot 10: Tampilan Grid menu yang disimpan disukai
 class HalamanMenuFavorit extends StatefulWidget {
-  const HalamanMenuFavorit({super.key});
+  final VoidCallback? saatPilihMenu;
+
+  const HalamanMenuFavorit({
+    super.key,
+    this.saatPilihMenu,
+  });
 
   @override
   State<HalamanMenuFavorit> createState() => _HalamanMenuFavoritState();
 }
 
 class _HalamanMenuFavoritState extends State<HalamanMenuFavorit> {
-  Future<void> _bukaPemilih() async {
+  String _kataKunci = '';
+
+  void _bukaModalPilihFavorit() async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -117,18 +68,14 @@ class _HalamanMenuFavoritState extends State<HalamanMenuFavorit> {
           height: MediaQuery.sizeOf(context).height * 0.9,
           child: _LembarPilihFavorit(
             saatBerubah: () {
-              if (mounted) {
-                setState(() {});
-              }
+              if (mounted) setState(() {});
             },
           ),
         );
       },
     );
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   void _hapusFavorit(int id) {
@@ -139,231 +86,163 @@ class _HalamanMenuFavoritState extends State<HalamanMenuFavorit> {
 
   @override
   Widget build(BuildContext context) {
-    final favorit = FavoritLokal.semua;
+    final semuaFavoritRaw = FavoritLokal.semua;
+    final semuaFavorit = semuaFavoritRaw.map((p) => Produk.fromJson(p)).toList();
+
+    // Saring dengan kata kunci pencarian
+    final daftarTampil = _kataKunci.isEmpty
+        ? semuaFavorit
+        : semuaFavorit.where((p) {
+            final kw = _kataKunci.toLowerCase();
+            return p.nama.toLowerCase().contains(kw) ||
+                (p.deskripsi?.toLowerCase().contains(kw) ?? false);
+          }).toList();
 
     return Scaffold(
-      backgroundColor: _warnaKrem,
+      backgroundColor: TemaWarna.latarKrem,
       appBar: AppBar(
-        title: const Text('Menu Favorit'),
-        backgroundColor: _warnaKrem,
-        foregroundColor: _warnaCokelat,
+        backgroundColor: TemaWarna.latarKrem,
+        elevation: 0,
         surfaceTintColor: Colors.transparent,
-      ),
-      body: favorit.isEmpty
-          ? _tampilanKosong()
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-              itemCount: favorit.length,
-              itemBuilder: (BuildContext context, int indeks) {
-                final produk = favorit[indeks];
-
-                return _KartuFavorit(
-                  produk: produk,
-                  saatDihapus: () {
-                    final id = _idProduk(produk);
-
-                    if (id != null) {
-                      _hapusFavorit(id);
-                    }
-                  },
-                );
-              },
-            ),
-      floatingActionButton: favorit.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _bukaPemilih,
-              backgroundColor: _warnaCokelat,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Favorit'),
-            ),
-    );
-  }
-
-  Widget _tampilanKosong() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 96,
-              height: 96,
-              decoration: const BoxDecoration(
-                color: _warnaKremTua,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.favorite_border,
-                size: 44,
-                color: _warnaCokelat,
-              ),
-            ),
-            const SizedBox(height: 24),
+        titleSpacing: 16,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             const Text(
-              'Belum ada menu favorit',
-              textAlign: TextAlign.center,
+              'Menu Favorit',
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _warnaCokelat,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: TemaWarna.teksUtama,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
             Text(
-              'Tandai menu kesukaanmu supaya lebih mudah ditemukan lagi.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color: _warnaCokelat.withAlpha(170),
+              '${semuaFavorit.length} Menu tersimpan disukai',
+              style: const TextStyle(
+                fontSize: 12,
+                color: TemaWarna.teksSekunder,
+                fontWeight: FontWeight.w500,
               ),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _bukaPemilih,
-              style: FilledButton.styleFrom(
-                backgroundColor: _warnaCokelat,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-              ),
-              icon: const Icon(Icons.add),
-              label: const Text('Pilih Menu Favorit'),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _KartuFavorit extends StatelessWidget {
-  const _KartuFavorit({required this.produk, required this.saatDihapus});
-
-  final Map<String, dynamic> produk;
-  final VoidCallback saatDihapus;
-
-  @override
-  Widget build(BuildContext context) {
-    final nama = _teks(produk['nama'], 'Produk');
-    final kategori = _teks(produk['kategori'], 'Menu');
-    final harga = _angka(produk['harga']);
-    final stok = _angka(produk['stok']);
-    final tersedia = produk['tersedia'] != false && stok > 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: _warnaCokelat.withAlpha(18),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.notifications_none_rounded,
+              color: TemaWarna.teksUtama,
+            ),
+            onPressed: () {},
           ),
+          const SizedBox(width: 8),
         ],
       ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: _warnaKremTua,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              kategori.toLowerCase().contains('minum')
-                  ? Icons.local_drink_outlined
-                  : Icons.restaurant_outlined,
-              size: 30,
-              color: _warnaCokelat,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  nama,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: _warnaCokelat,
+      body: semuaFavorit.isEmpty
+          ? TampilanKosong(
+              ikon: Icons.favorite_border_rounded,
+              judul: 'Belum Ada Menu Favorit',
+              pesan:
+                  'Tandai menu kesukaanmu dengan ikon hati agar lebih mudah ditemukan dan dipesan lagi.',
+              teksAksi: 'Pilih Menu Sekarang',
+              saatAksiDitekan: widget.saatPilihMenu ?? _bukaModalPilihFavorit,
+            )
+          : CustomScrollView(
+              slivers: [
+                // Bilah Pencarian Menu Favorit
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    child: BilahPencarian(
+                      nilaiAwal: _kataKunci,
+                      petunjuk: 'Cari menu favoritmu...',
+                      saatCari: (kw) {
+                        setState(() => _kataKunci = kw.trim());
+                      },
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  kategori,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _warnaCokelat.withAlpha(150),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: <Widget>[
-                    Text(
-                      _formatRupiah(harga),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: _warnaCokelat,
+
+                // Grid Menu Favorit
+                if (daftarTampil.isEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: TampilanKosong(
+                      judul: 'Tidak Ditemukan',
+                      pesan: 'Tidak ada menu favorit yang cocok dengan pencarian.',
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.68,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final produk = daftarTampil[index];
+                          return KartuProduk(
+                            produk: produk,
+                            isFavorit: true,
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      HalamanRincianProduk(produk: produk),
+                                ),
+                              );
+                            },
+                            onFavorit: () => _hapusFavorit(produk.id),
+                            onTambah: () async {
+                              final layanan = LayananApi();
+                              try {
+                                await layanan.tambahKeKeranjang(
+                                  produkId: produk.id,
+                                  jumlah: 1,
+                                );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${produk.nama} ditambahkan ke keranjang'),
+                                  ),
+                                );
+                              } catch (_) {}
+                            },
+                          );
+                        },
+                        childCount: daftarTampil.length,
                       ),
                     ),
-                    if (!tersedia) ...<Widget>[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withAlpha(20),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          'Habis',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
               ],
             ),
-          ),
-          IconButton(
-            onPressed: saatDihapus,
-            tooltip: 'Hapus dari favorit',
-            icon: const Icon(Icons.favorite, color: Colors.red),
-          ),
-        ],
-      ),
+      floatingActionButton: semuaFavorit.isEmpty
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _bukaModalPilihFavorit,
+              backgroundColor: TemaWarna.cokelatUtama,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text(
+                'Tambah Favorit',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
     );
   }
 }
 
+/// Modal Bottom Sheet untuk memilih dan menandai menu favorit dari API
 class _LembarPilihFavorit extends StatefulWidget {
-  const _LembarPilihFavorit({required this.saatBerubah});
-
   final VoidCallback saatBerubah;
+
+  const _LembarPilihFavorit({required this.saatBerubah});
 
   @override
   State<_LembarPilihFavorit> createState() => _LembarPilihFavoritState();
@@ -372,8 +251,8 @@ class _LembarPilihFavorit extends StatefulWidget {
 class _LembarPilihFavoritState extends State<_LembarPilihFavorit> {
   final LayananApi _layanan = LayananApi();
   KeadaanMuat _keadaan = KeadaanMuat.memuat;
-  List<Map<String, dynamic>> _produk = <Map<String, dynamic>>[];
-  String _pesanGalat = '';
+  List<Produk> _daftarProduk = [];
+  GalatApi? _galat;
 
   @override
   void initState() {
@@ -384,43 +263,36 @@ class _LembarPilihFavoritState extends State<_LembarPilihFavorit> {
   Future<void> _muatProduk() async {
     setState(() {
       _keadaan = KeadaanMuat.memuat;
-      _pesanGalat = '';
+      _galat = null;
     });
 
     try {
-      final data = await _layanan.ambil('/produk');
-      final daftar = data is List
-          ? data
-                .map(_peta)
-                .where((Map<String, dynamic> item) => item.isNotEmpty)
-                .toList()
-          : <Map<String, dynamic>>[];
-
-      if (!mounted) {
-        return;
-      }
+      final hasil = await _layanan.ambilDaftarProduk();
+      if (!mounted) return;
 
       setState(() {
-        _produk = daftar;
-        _keadaan = daftar.isEmpty ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
+        _daftarProduk = hasil;
+        _keadaan = hasil.isEmpty ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
       });
-    } on GalatApi catch (galat) {
-      if (!mounted) {
-        return;
-      }
-
+    } on GalatApi catch (g) {
+      if (!mounted) return;
       setState(() {
-        _pesanGalat = galat.pesan;
+        _galat = g;
+        _keadaan = KeadaanMuat.galat;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _galat = GalatApi.umum();
         _keadaan = KeadaanMuat.galat;
       });
     }
   }
 
-  void _alihkan(Map<String, dynamic> produk) {
+  void _alihkan(Produk produk) {
     setState(() {
-      FavoritLokal.alihkan(produk);
+      FavoritLokal.alihkan(produk.toJson());
     });
-
     widget.saatBerubah();
   }
 
@@ -428,196 +300,129 @@ class _LembarPilihFavoritState extends State<_LembarPilihFavorit> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: _warnaKrem,
+        color: TemaWarna.latarKrem,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SafeArea(
         top: false,
         child: Column(
-          children: <Widget>[
+          children: [
             const SizedBox(height: 12),
             Container(
               width: 44,
-              height: 4,
+              height: 5,
               decoration: BoxDecoration(
-                color: _warnaCokelat.withAlpha(60),
-                borderRadius: BorderRadius.circular(999),
+                color: Colors.grey.shade400,
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
               child: Row(
-                children: <Widget>[
+                children: [
                   const Expanded(
                     child: Text(
                       'Pilih Menu Favorit',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: _warnaCokelat,
+                        fontWeight: FontWeight.w800,
+                        color: TemaWarna.teksUtama,
                       ),
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    tooltip: 'Tutup',
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
             ),
-            Expanded(child: _isi()),
+            Expanded(child: _bangunKonten()),
           ],
         ),
       ),
     );
   }
 
-  Widget _isi() {
+  Widget _bangunKonten() {
     switch (_keadaan) {
       case KeadaanMuat.memuat:
-        return const Center(child: CircularProgressIndicator());
+        return const TampilanMuat(pesan: 'Memuat daftar menu...');
       case KeadaanMuat.galat:
-        return _tampilanGalat();
+        return TampilanGalat(galat: _galat, saatCobaLagi: _muatProduk);
       case KeadaanMuat.kosong:
-        return _tampilanKosong();
+        return const TampilanKosong(
+          judul: 'Belum Ada Menu',
+          pesan: 'Tidak ada produk yang dapat dipilih.',
+        );
       case KeadaanMuat.berhasil:
-        return _daftar();
-    }
-  }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          itemCount: _daftarProduk.length,
+          itemBuilder: (context, index) {
+            final produk = _daftarProduk[index];
+            final bool dipilih = FavoritLokal.berisi(produk.id);
 
-  Widget _tampilanGalat() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.cloud_off, size: 44, color: _warnaCokelat),
-            const SizedBox(height: 12),
-            Text(
-              _pesanGalat.isEmpty ? 'Menu belum bisa dimuat.' : _pesanGalat,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: _warnaCokelat),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _muatProduk,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Coba lagi'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tampilanKosong() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.restaurant_menu, size: 44, color: _warnaCokelat),
-            const SizedBox(height: 12),
-            const Text(
-              'Belum ada produk yang bisa dipilih.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _warnaCokelat),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _muatProduk,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Muat ulang'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _daftar() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      itemCount: _produk.length,
-      itemBuilder: (BuildContext context, int indeks) {
-        final produk = _produk[indeks];
-        final id = _idProduk(produk);
-        final dipilih = id != null && FavoritLokal.berisi(id);
-        final nama = _teks(produk['nama'], 'Produk');
-        final kategori = _teks(produk['kategori'], 'Menu');
-        final harga = _angka(produk['harga']);
-        final stok = _angka(produk['stok']);
-        final tersedia = produk['tersedia'] != false && stok > 0;
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Material(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            child: InkWell(
-              onTap: id == null ? null : () => _alihkan(produk),
-              borderRadius: BorderRadius.circular(18),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: _warnaKremTua,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        kategori.toLowerCase().contains('minum')
-                            ? Icons.local_drink_outlined
-                            : Icons.restaurant_outlined,
-                        color: _warnaCokelat,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            nama,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _warnaCokelat,
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: TemaWarna.garisAbu),
+              ),
+              color: Colors.white,
+              child: ListTile(
+                onTap: () => _alihkan(produk),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    color: TemaWarna.kremTua,
+                    child: produk.gambar != null
+                        ? Image.network(
+                            produk.gambar!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.restaurant_rounded,
+                              color: TemaWarna.cokelatUtama,
                             ),
+                          )
+                        : const Icon(
+                            Icons.restaurant_rounded,
+                            color: TemaWarna.cokelatUtama,
                           ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${_formatRupiah(harga)} • '
-                            '${tersedia ? 'Tersedia' : 'Habis'}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _warnaCokelat.withAlpha(160),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      dipilih ? Icons.favorite : Icons.favorite_border,
-                      color: dipilih
-                          ? Colors.red
-                          : _warnaCokelat.withAlpha(120),
-                    ),
-                  ],
+                  ),
+                ),
+                title: Text(
+                  produk.nama,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: Text(
+                  '${TemaWarna.formatRupiah(produk.harga)} • ${produk.kategori}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: TemaWarna.teksSekunder,
+                  ),
+                ),
+                trailing: IconButton(
+                  icon: Icon(
+                    dipilih ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    color: dipilih ? Colors.red : Colors.grey,
+                  ),
+                  onPressed: () => _alihkan(produk),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
-      },
-    );
+    }
   }
 }
