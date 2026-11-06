@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/halaman/halaman_utama.dart';
 
-import '../widget/navigasi_bawah.dart
+import '../widget/navigasi_bawah.dart';
+import 'halaman_katalog.dart';
 import 'halaman_menu_favorit.dart';
 import 'halaman_keranjang.dart';
 import 'halaman_riwayat_pesanan.dart';
@@ -11,8 +11,7 @@ class HalamanUtama extends StatefulWidget {
   const HalamanUtama({super.key});
 
   @override
-  State<HalamanUtama> createState() => _HalamanUtamaState()=> _HalamanUtamaState();
-
+  State<HalamanUtama> createState() => _HalamanUtamaState();
 }
 
 class _HalamanUtamaState extends State<HalamanUtama> {
