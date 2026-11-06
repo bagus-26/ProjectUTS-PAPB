@@ -2,26 +2,26 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Table('produk')]
-#[Fillable([
-    'nama',
-    'harga',
-    'kategori',
-    'stok',
-    'tersedia',
-    'deskripsi',
-    'bisa_pedas',
-    'waktu_persiapan_menit',
-])]
 class Produk extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'produk';
+
+    protected $fillable = [
+        'nama',
+        'harga',
+        'kategori',
+        'stok',
+        'tersedia',
+        'deskripsi',
+        'bisa_pedas',
+        'waktu_persiapan_menit',
+    ];
 
     /**
      * @return array<string, string>

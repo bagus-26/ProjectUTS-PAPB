@@ -2,13 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 
-#[Table('toko')]
-#[Fillable(['nama', 'jam_buka', 'jam_tutup'])]
 class Toko extends Model
 {
-    //
+    protected $table = 'toko';
+
+    protected $fillable = ['nama', 'jam_buka', 'jam_tutup'];
 }

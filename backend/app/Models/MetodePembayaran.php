@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Table('metode_pembayaran')]
-#[Fillable(['kode', 'nama', 'aktif'])]
 class MetodePembayaran extends Model
 {
+    protected $table = 'metode_pembayaran';
+
+    protected $fillable = ['kode', 'nama', 'aktif'];
+
     /**
      * @return array<string, string>
      */

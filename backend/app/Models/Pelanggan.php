@@ -2,17 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Table('pelanggan')]
-#[Fillable(['nama', 'token'])]
-#[Hidden(['token'])]
 class Pelanggan extends Model
 {
+    protected $table = 'pelanggan';
+
+    protected $fillable = ['nama', 'token'];
+
+    protected $hidden = ['token'];
+
     /**
      * @return HasMany<Keranjang, $this>
      */

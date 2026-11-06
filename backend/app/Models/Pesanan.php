@@ -2,28 +2,28 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Table('pesanan')]
-#[Fillable([
-    'nomor_pesanan',
-    'pelanggan_id',
-    'kurir_id',
-    'metode_pembayaran_id',
-    'nama_penerima',
-    'alamat_penerima',
-    'subtotal',
-    'ongkos_kirim',
-    'total',
-    'status',
-    'kunci_idempoten',
-])]
 class Pesanan extends Model
 {
+    protected $table = 'pesanan';
+
+    protected $fillable = [
+        'nomor_pesanan',
+        'pelanggan_id',
+        'kurir_id',
+        'metode_pembayaran_id',
+        'nama_penerima',
+        'alamat_penerima',
+        'subtotal',
+        'ongkos_kirim',
+        'total',
+        'status',
+        'kunci_idempoten',
+    ];
+
     /**
      * @return array<string, string>
      */

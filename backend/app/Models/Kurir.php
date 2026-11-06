@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Table('kurir')]
-#[Fillable(['nama', 'wilayah', 'tarif', 'aktif'])]
 class Kurir extends Model
 {
+    protected $table = 'kurir';
+
+    protected $fillable = ['nama', 'wilayah', 'tarif', 'aktif'];
+
     /**
      * @return array<string, string>
      */

@@ -2,22 +2,22 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Table('keranjang')]
-#[Fillable([
-    'pelanggan_id',
-    'produk_id',
-    'varian_id',
-    'jumlah',
-    'tingkat_pedas',
-    'catatan',
-])]
 class Keranjang extends Model
 {
+    protected $table = 'keranjang';
+
+    protected $fillable = [
+        'pelanggan_id',
+        'produk_id',
+        'varian_id',
+        'jumlah',
+        'tingkat_pedas',
+        'catatan',
+    ];
+
     /**
      * @return array<string, string>
      */
