@@ -8,14 +8,12 @@ Dokumen acuan utama: [`docs/PRD.md`](docs/PRD.md). Kontrak API v1 diringkas di [
 
 | Kode | Nama | NIM | Peran |
 |---|---|---|---|
-| PM | Bagus Artandyo | 24102029 | Project Manager, fondasi backend & Flutter, integrasi, README |
+| PM | Bagus Artandyo Witjaksono | 24102029 | Project Manager (Ketua Kelompok), fondasi backend & Flutter, integrasi, README |
 | A1 | Adhiyatma Pandu Hermansyah | 24102002 | Backend: basis data, seeder, Produk |
 | A2 | Nurul Maghfiroh | 24102051 | Backend: Keranjang, Checkout, transaksi |
-| A3 | [lengkapi] | [NIM] | Backend: Pesanan, Kurir, status, dokumentasi API |
-| A4 | [lengkapi] | [NIM] | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
-| A5 | [lengkapi] | [NIM] | Flutter: Keranjang, Checkout, Rincian Pesanan |
-
-Lengkapi nama dan NIM A3–A5 sebelum pengumpulan.
+| A3 | Alifia Az-Zahrah Murtidewi | 24102004 | Backend: Pesanan, Kurir, status, dokumentasi API; UI/UX Flutter |
+| A4 | Erika Salsabila Intania | 24102009 | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
+| A5 | Mir'atus Sani Fadillah | 24102047 | Flutter: Keranjang, Checkout, Rincian Pesanan, Widget |
 
 ## 2. Domain dan Aturan Khas
 
@@ -47,7 +45,7 @@ CREATE DATABASE FastFoodUTS CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 Sesuaikan `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, dan `DB_PASSWORD` pada `.env`. Default proyek: MySQL Laragon, `root`, tanpa kata sandi, basis data `FastFoodUTS`.
 
-Setelah migration dan seeder domain tersedia:
+Migrasi dan seeder domain (produk, varian, kurir, metode pembayaran, toko, pelanggan, dan pesanan contoh) sudah tersedia dan dijalankan sekali:
 
 ```bash
 php artisan migrate --seed
@@ -72,7 +70,7 @@ PRD mensyaratkan izin `INTERNET` dan `android:usesCleartextTraffic="true"` pada 
 
 ## 5. Token Statis
 
-Kontrak API menetapkan header `Authorization: Bearer <token>`. Nilai untuk data seed tercantum di bawah; saat ini autentikasi dan data pelanggan belum dapat dipakai sampai migration dan seeder domain tersedia.
+Kontrak API menetapkan header `Authorization: Bearer <token>`. Nilai untuk data seed tercantum di bawah.
 
 | Pelanggan | Token |
 |---|---|
@@ -159,7 +157,7 @@ Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak 
 
 ## 11. Status Implementasi Saat Ini
 
-- Backend sudah memiliki pembungkus respons, middleware, handler exception, dan 16 route; controller endpoint masih stub yang membalas 501. Migration dan seeder domain belum tersedia.
+- Backend sudah memiliki pembungkus respons, middleware, handler exception, dan 16 route; controller endpoint masih stub yang membalas 501. Migrasi dan seeder domain (produk, varian, keranjang, pesanan, detail pesanan, kurir, metode pembayaran, toko, pelanggan) sudah tersedia.
 - Flutter memiliki layanan HTTP, batas waktu, exception bertipe, enum keadaan layar, model, widget, dan beberapa halaman. Integrasi endpoint belum lengkap; `mobile/lib/main.dart` masih menampilkan aplikasi counter Flutter bawaan.
 - PRD mensyaratkan 7 halaman Flutter, migration dan seeder domain, serta endpoint berfungsi. Semua itu masih menjadi pekerjaan implementasi; status terkini dapat berubah seiring pengerjaan.
 - PDF dokumentasi API, Postman, dan ERD ditunda sementara. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.
