@@ -1,38 +1,21 @@
-<<<<<<< HEAD
-# projek_makanyukk
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
 # Toko Online Kelompok 1 — Makanan dan Minuman Siap Saji
 
-Repositori tugas pengganti UTS mata kuliah Pemrograman Aplikasi Perangkat Bergerak (PAPB) dan Sistem Terdistribusi. Aplikasi terdiri atas REST API Laravel + MySQL (`backend/`) dan aplikasi Flutter (`mobile/`).
+Repositori tugas pengganti UTS mata kuliah Pemrograman Aplikasi Perangkat Bergerak (PAPB) dan Sistem Terdistribusi. Sesuai PRD Bagian 12.1, proyek terdiri atas REST API Laravel + MySQL di `backend/`, aplikasi Flutter di `mobile/`, dokumentasi di `docs/`, dan README ini.
 
-Dokumen sumber: [`docs/PRD.md`](docs/PRD.md). Kontrak API ada di Bagian 6 dan sudah dibekukan sebagai Kontrak API v1.
+Dokumen acuan utama: [`docs/PRD.md`](docs/PRD.md). Kontrak API v1 diringkas di [`docs/kontrak-api-v1.md`](docs/kontrak-api-v1.md).
 
 ## 1. Identitas Kelompok
 
 | Kode | Nama | NIM | Peran |
 |---|---|---|---|
-| PM | `Bagus Artandyo` | `24102029` | Project Manager, fondasi backend & Flutter, integrasi, README |
-| A1 | `Adhiyatma Pandu Hermansyah` | `24102002` | Backend: basis data, seeder, Produk |
-| A2 | `Nurul Maghfiroh ` | `24102051` | Backend: Keranjang, Checkout, transaksi |
-| A3 | `E` | `[NIM]` | Backend: Pesanan, Kurir, status, dokumen API + Postman |
-| A4 | `[nama]` | `[NIM]` | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
-| A5 | `[nama]` | `[NIM]` | Flutter: Keranjang, Checkout, Rincian Pesanan |
+| PM | Bagus Artandyo | 24102029 | Project Manager, fondasi backend & Flutter, integrasi, README |
+| A1 | Adhiyatma Pandu Hermansyah | 24102002 | Backend: basis data, seeder, Produk |
+| A2 | Nurul Maghfiroh | 24102051 | Backend: Keranjang, Checkout, transaksi |
+| A3 | [lengkapi] | [NIM] | Backend: Pesanan, Kurir, status, dokumentasi API |
+| A4 | [lengkapi] | [NIM] | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
+| A5 | [lengkapi] | [NIM] | Flutter: Keranjang, Checkout, Rincian Pesanan |
+
+Lengkapi nama dan NIM A3–A5 sebelum pengumpulan.
 
 ## 2. Domain dan Aturan Khas
 
@@ -64,7 +47,7 @@ CREATE DATABASE FastFoodUTS CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 Sesuaikan `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, dan `DB_PASSWORD` pada `.env`. Default proyek: MySQL Laragon, `root`, tanpa kata sandi, basis data `FastFoodUTS`.
 
-Setelah migrasi dan seeder tersedia (A1-01 dan A1-03):
+Setelah migration dan seeder domain tersedia:
 
 ```bash
 php artisan migrate --seed
@@ -75,22 +58,21 @@ Alamat lokal: `http://127.0.0.1:8000`. Zona waktu aplikasi: `Asia/Jakarta`.
 
 ## 4. Menjalankan Flutter
 
+Jalankan Flutter dari direktori `mobile/`:
+
 ```bash
 cd mobile
 flutter pub get
 flutter run
 ```
 
-Alamat server diatur di satu tempat: `mobile/lib/konfigurasi/konfigurasi.dart`.
+Alamat server berada di `mobile/lib/layanan/layanan_api.dart` (`baseUrlDefault`). Emulator Android menggunakan `http://10.0.2.2:8000/api`; perangkat fisik perlu memakai IP LAN laptop, misalnya `http://192.168.1.10:8000/api`, dan backend dijalankan dengan `php artisan serve --host=0.0.0.0`.
 
-- Emulator Android: `http://10.0.2.2:8000/api`
-- Perangkat fisik: ganti dengan IP LAN laptop, misalnya `http://192.168.1.10:8000/api`, lalu jalankan `php artisan serve --host=0.0.0.0`.
-
-Manifest Android utama sudah memuat izin `INTERNET` dan `android:usesCleartextTraffic="true"` agar HTTP lokal tidak diblokir.
+PRD mensyaratkan izin `INTERNET` dan `android:usesCleartextTraffic="true"` pada manifest Android utama agar koneksi HTTP lokal dapat digunakan. Pastikan konfigurasi ini ada di `mobile/android/app/src/main/AndroidManifest.xml`.
 
 ## 5. Token Statis
 
-Semua permintaan API memakai header `Authorization: Bearer <token>`.
+Kontrak API menetapkan header `Authorization: Bearer <token>`. Nilai untuk data seed tercantum di bawah; saat ini autentikasi dan data pelanggan belum dapat dipakai sampai migration dan seeder domain tersedia.
 
 | Pelanggan | Token |
 |---|---|
@@ -101,7 +83,7 @@ Token salah atau kosong dibalas `401` dengan pembungkus yang sama.
 
 ## 6. Daftar Endpoint
 
-Pembungkus respons: `status`, `code` (string), `message`, `data`, dan `errors` (khusus 422). Detail lengkap ada di [`docs/PRD.md`](docs/PRD.md) Bagian 6.
+Daftar berikut adalah kontrak yang direncanakan dalam PRD Bagian 6, bukan pernyataan bahwa endpoint sudah berfungsi. Saat ini controller masih berupa stub. Pembungkus respons: `status`, `code` (string), `message`, `data`, dan `errors` (khusus 422).
 
 | Metode | Jalur | Fungsi | PIC |
 |---|---|---|---|
@@ -122,7 +104,7 @@ Pembungkus respons: `status`, `code` (string), `message`, `data`, dan `errors` (
 | GET | `/api/kategori` | Daftar kategori untuk filter | A1 |
 | GET | `/api/metode-pembayaran` | Daftar metode pembayaran simulasi | A3 |
 
-Dokumentasi API PDF disusun A3. Koleksi Postman diletakkan di `docs/`.
+PDF dokumentasi API dan ekspor Postman direncanakan sesuai PRD, tetapi ditunda sementara sesuai prioritas pengerjaan saat ini.
 
 ## 7. Simulasi Galat dan Jam Buka saat Demo
 
@@ -138,16 +120,21 @@ Mengubah jam buka lewat tinker (bukan mengubah jam laptop):
 php artisan tinker --execute 'DB::table("toko")->update(["jam_buka" => "08:00", "jam_tutup" => "21:00"]);'
 ```
 
-Lembar demo lengkap: [`docs/lembar-demo-langsung.md`](docs/lembar-demo-langsung.md).
+Lembar persiapan demo langsung (tanpa video): [`docs/lembar-demo-langsung.md`](docs/lembar-demo-langsung.md). Langkah demo baru dapat dijalankan setelah backend dan integrasi Flutter selesai.
 
 ## 8. Struktur Repositori
 
 ```text
 .
-|-- backend/     # Laravel 13 (REST API)
-|-- mobile/      # Flutter
-|-- docs/        # PRD, lembar demo, koleksi Postman, PDF
-|-- .github/     # template PR dan Issue
+|-- backend/                 # proyek Laravel 12 (REST API)
+|   |-- database/migrations/
+|   |-- database/seeders/
+|   `-- .env.example
+|-- mobile/                  # proyek Flutter
+|   |-- lib/
+|   |-- test/
+|   `-- pubspec.yaml
+|-- docs/                    # PRD, kontrak API, catatan Flutter, lembar demo
 |-- README.md
 ```
 
@@ -165,14 +152,14 @@ Bantuan AI: fondasi awal PM-01/PM-02/PM-03/PM-05 (struktur repo, skeleton Larave
 
 Pustaka produksi:
 
-- Laravel 13 dan ekosistemnya (`laravel/framework`, `laravel/tinker`).
-- Flutter 3.x dengan paket `http` (permintaan HTTP) dan `uuid` (kunci idempoten checkout).
+- Laravel 12 dan ekosistemnya (`laravel/framework`, `laravel/tinker`).
+- Flutter dengan paket `http` (permintaan HTTP). Paket `uuid` direncanakan dalam PRD untuk kunci idempoten checkout, tetapi belum tercantum di `mobile/pubspec.yaml`.
 
 Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak ada payment gateway maupun API ekspedisi.
 
-## 11. Status Kerangka
+## 11. Status Implementasi Saat Ini
 
-- Skeleton Laravel sudah memuat pembungkus respons, middleware `ForceJson` dan `PelangganStatis`, handler exception global, dan 16 route dengan controller stub (membalas 501 sampai pemiliknya mengisi).
-- Inti Flutter sudah memuat `Konfigurasi`, `LayananApi` bertimeout 10 detik, exception bertipe, dan enum `KeadaanMuat`. Halaman uji sambung sementara di `main.dart` akan diganti `HalamanKatalog` oleh A4-02.
-- Migrasi domain, seeder, dan seluruh endpoint diisi A1–A3. Model Dart dan halaman diisi A4–A5.
->>>>>>> d9ff59d422df6b2b74171e37a8e8c35d50045f87
+- Backend sudah memiliki pembungkus respons, middleware, handler exception, dan 16 route; controller endpoint masih stub yang membalas 501. Migration dan seeder domain belum tersedia.
+- Flutter memiliki layanan HTTP, batas waktu, exception bertipe, enum keadaan layar, model, widget, dan beberapa halaman. Integrasi endpoint belum lengkap; `mobile/lib/main.dart` masih menampilkan aplikasi counter Flutter bawaan.
+- PRD mensyaratkan 7 halaman Flutter, migration dan seeder domain, serta endpoint berfungsi. Semua itu masih menjadi pekerjaan implementasi; status terkini dapat berubah seiring pengerjaan.
+- PDF dokumentasi API, Postman, dan ERD ditunda sementara. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.
