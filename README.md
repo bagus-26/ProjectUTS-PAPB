@@ -1,25 +1,6 @@
-<<<<<<< HEAD
-# projek_makanyuk
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
 # Toko Online Kelompok 1 — Makanan dan Minuman Siap Saji
 
-Repositori tugas pengganti UTS mata kuliah Pemrograman Aplikasi Perangkat Bergerak (PAPB) dan Sistem Terdistribusi. Aplikasi terdiri atas REST API Laravel + MySQL (`backend/`) dan aplikasi Flutter (`mobile/`).
+Repositori tugas pengganti UTS mata kuliah Pemrograman Aplikasi Perangkat Bergerak (PAPB) dan Sistem Terdistribusi. Aplikasi terdiri atas REST API Laravel + MySQL (`backend/`) dan aplikasi Flutter di root repositori (`lib/`).
 
 Dokumen sumber: [`docs/PRD.md`](docs/PRD.md). Kontrak API ada di Bagian 6 dan sudah dibekukan sebagai Kontrak API v1.
 
@@ -76,12 +57,11 @@ Alamat lokal: `http://127.0.0.1:8000`. Zona waktu aplikasi: `Asia/Jakarta`.
 ## 4. Menjalankan Flutter
 
 ```bash
-cd mobile
 flutter pub get
 flutter run
 ```
 
-Alamat server diatur di satu tempat: `mobile/lib/konfigurasi/konfigurasi.dart`.
+Alamat server diatur di satu tempat: `lib/layanan/layanan_api.dart`.
 
 - Emulator Android: `http://10.0.2.2:8000/api`
 - Perangkat fisik: ganti dengan IP LAN laptop, misalnya `http://192.168.1.10:8000/api`, lalu jalankan `php artisan serve --host=0.0.0.0`.
@@ -145,7 +125,7 @@ Lembar demo lengkap: [`docs/lembar-demo-langsung.md`](docs/lembar-demo-langsung.
 ```text
 .
 |-- backend/     # Laravel 13 (REST API)
-|-- mobile/      # Flutter
+|-- lib/         # Flutter
 |-- docs/        # PRD, lembar demo, koleksi Postman, PDF
 |-- .github/     # template PR dan Issue
 |-- README.md
@@ -175,4 +155,3 @@ Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak 
 - Skeleton Laravel sudah memuat pembungkus respons, middleware `ForceJson` dan `PelangganStatis`, handler exception global, dan 16 route dengan controller stub (membalas 501 sampai pemiliknya mengisi).
 - Inti Flutter sudah memuat `Konfigurasi`, `LayananApi` bertimeout 10 detik, exception bertipe, dan enum `KeadaanMuat`. Halaman uji sambung sementara di `main.dart` akan diganti `HalamanKatalog` oleh A4-02.
 - Migrasi domain, seeder, dan seluruh endpoint diisi A1–A3. Model Dart dan halaman diisi A4–A5.
->>>>>>> e0e168a66d3fa9bfae05a96180c0d1cd0a7b954f
