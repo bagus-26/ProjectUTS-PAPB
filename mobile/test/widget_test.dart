@@ -1,30 +1,82 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:projek_makanyukk/main.dart';
+import 'package:projek_makanyuk/model/produk.dart';
+import 'package:projek_makanyuk/widget/chip_kategori.dart';
+import 'package:projek_makanyuk/widget/pemilih_jumlah.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('Model Produk parse JSON dengan atribut khas Domain 1', () {
+    final json = {
+      'id': 1,
+      'nama': 'Iced Latte',
+      'harga': 18000,
+      'kategori': 'Minuman',
+      'stok': 10,
+      'tersedia': true,
+      'deskripsi': 'Kopi susu dingin',
+      'varian_porsi': ['Reguler', 'Large'],
+      'tingkat_kepedasan': ['Normal Ice', 'Less Ice'],
+    };
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final produk = Produk.fromJson(json);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(produk.id, 1);
+    expect(produk.nama, 'Iced Latte');
+    expect(produk.harga, 18000);
+    expect(produk.dapatDipesan, true);
+    expect(produk.varianPorsi, contains('Large'));
+    expect(produk.tingkatKepedasan, contains('Less Ice'));
+  });
+
+  testWidgets('PemilihJumlah menaikkan dan menurunkan angka secara benar',
+      (WidgetTester tester) async {
+    int nilai = 2;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return PemilihJumlah(
+                nilai: nilai,
+                min: 1,
+                max: 5,
+                saatBerubah: (baru) {
+                  setState(() => nilai = baru);
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('2'), findsOneWidget);
+
+    // Tekan tombol tambah (+)
+    await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pump();
+    expect(nilai, 3);
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('ChipKategori menampilkan daftar kategori',
+      (WidgetTester tester) async {
+    String terpilih = 'Semua';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChipKategori(
+            daftarKategori: const ['Semua', 'Minuman', 'Makanan'],
+            kategoriTerpilih: terpilih,
+            saatDipilih: (kat) => terpilih = kat,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Semua'), findsOneWidget);
+    expect(find.text('Minuman'), findsOneWidget);
+    expect(find.text('Makanan'), findsOneWidget);
   });
 }

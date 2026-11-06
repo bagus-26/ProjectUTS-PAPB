@@ -18,28 +18,45 @@ class HalamanUtama extends StatefulWidget {
 class _HalamanUtamaState extends State<HalamanUtama> {
   int _indeks = 0;
 
-  final List<Widget> _-halaman = <widget>[
-  HalamanDashboard();
-  HalamanMenuFavorit();
-  HalamanKeranjang();
-  HalamanRiwayatPesanan();
-  HalamanProfil();
-  ];
+  void _pindahKeTab(int indeks) {
+    setState(() {
+      _indeks = indeks;
+    });
+  }
 
+  void _bukaKeranjang() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => HalamanKeranjang(
+          saatPilihMenu: () {
+            Navigator.of(context).pop();
+            _pindahKeTab(0);
+          },
+        ),
+      ),
+    );
+  }
 
-@overide
-widget build(BuildContext context) {
-return Scaffold(
-body: IndexedStack(
-index: _indeks,
-childeren: _halaman,
-bottomNavigationBar: NavigasiBawah(
-indeks: _indeks,
-onTap: (int indeks) {
-setState(() {
-_indeks = indeks;
-});
-},  
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> halaman = [
+      HalamanKatalog(
+        saatBukaKeranjang: _bukaKeranjang,
+      ),
+      const HalamanRiwayatPesanan(),
+      const HalamanMenuFavorit(),
+      const HalamanProfil(),
+    ];
 
-)
+    return Scaffold(
+      body: IndexedStack(
+        index: _indeks,
+        children: halaman,
+      ),
+      bottomNavigationBar: NavigasiBawah(
+        indeks: _indeks,
+        onTap: _pindahKeTab,
+      ),
+    );
+  }
 }

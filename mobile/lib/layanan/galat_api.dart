@@ -107,3 +107,4 @@ class GalatApi implements Exception {
   @override
   String toString() => pesan;
 }
+

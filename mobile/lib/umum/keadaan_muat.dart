@@ -13,3 +13,4 @@ enum KeadaanMuat {
   /// Terjadi galat jaringan, timeout, atau galat server
   galat,
 }
+
