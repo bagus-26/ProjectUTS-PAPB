@@ -125,9 +125,12 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     try {
       final keranjang = await _layanan.ambilKeranjang();
       if (!mounted) return;
+      final ringkasan = keranjang['ringkasan'];
       setState(() {
-        _totalItemKeranjang = (keranjang['total_item'] as int?) ?? 0;
-        _subtotalKeranjang = (keranjang['subtotal'] as int?) ?? 0;
+        _totalItemKeranjang = (keranjang['jumlah_item'] as int?) ?? 0;
+        _subtotalKeranjang = ringkasan is Map
+            ? (ringkasan['subtotal'] as int?) ?? 0
+            : 0;
       });
     } catch (_) {
       // Diamkan jika keranjang belum aktif
@@ -175,8 +178,12 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
       await _layanan.tambahKeKeranjang(
         produkId: produk.id,
         jumlah: 1,
-        varianPorsi: produk.varianPorsi.isNotEmpty ? produk.varianPorsi.first : 'Reguler',
-        tingkatKepedasan: produk.tingkatKepedasan.isNotEmpty ? produk.tingkatKepedasan.first : 'Tidak Pedas',
+        varianId: produk.varianPorsi.isNotEmpty
+            ? produk.idVarian(produk.varianPorsi.first)
+            : null,
+        varianNama:
+            produk.varianPorsi.isNotEmpty ? produk.varianPorsi.first : 'Reguler',
+        tingkatPedas: produk.bisaPedas ? 'tidak_pedas' : null,
       );
 
       _muatStatusKeranjang();
@@ -540,4 +547,3 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     );
   }
 }
-

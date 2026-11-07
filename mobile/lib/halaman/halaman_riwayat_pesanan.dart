@@ -187,11 +187,25 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
     if (rawItems is List && rawItems.isNotEmpty) {
       for (final item in rawItems) {
         try {
+          final varian = item['varian'];
+          final rawTingkatPedas = item['tingkat_pedas']?.toString();
+          final tingkatPedas = const {
+            'tidak_pedas',
+            'sedang',
+            'pedas',
+            'sangat_pedas',
+          }.contains(rawTingkatPedas)
+              ? rawTingkatPedas
+              : null;
+
           await _layanan.tambahKeKeranjang(
             produkId: (item['produk_id'] as int?) ?? 1,
             jumlah: (item['jumlah'] as int?) ?? 1,
-            varianPorsi: item['varian_porsi']?.toString(),
-            tingkatKepedasan: item['tingkat_kepedasan']?.toString(),
+            varianId: varian is Map ? varian['id'] as int? : null,
+            varianNama: varian is Map
+                ? varian['nama']?.toString()
+                : item['varian_porsi']?.toString(),
+            tingkatPedas: tingkatPedas,
           );
         } catch (_) {}
       }

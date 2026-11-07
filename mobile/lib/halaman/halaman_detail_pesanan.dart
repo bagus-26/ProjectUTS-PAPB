@@ -233,6 +233,24 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 ),
                 const SizedBox(height: 10),
                 ...widget.items.map((item) {
+                  final varian = item['varian'];
+                  final namaVarian = varian is Map
+                      ? varian['nama']?.toString()
+                      : item['varian_porsi']?.toString();
+                  final tingkatPedas = switch (item['tingkat_pedas']) {
+                    'tidak_pedas' => 'Tidak Pedas',
+                    'sedang' => 'Sedang',
+                    'pedas' => 'Pedas',
+                    'sangat_pedas' => 'Sangat Pedas',
+                    _ => item['tingkat_kepedasan']?.toString(),
+                  };
+                  final subtotalItem = item['subtotal'] is int
+                      ? item['subtotal'] as int
+                      : (item['harga_satuan'] as int? ??
+                              item['harga'] as int? ??
+                              0) *
+                          (item['jumlah'] as int? ?? 1);
+
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: Row(
@@ -246,16 +264,18 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                                 '${item['jumlah']}x ${item['nama']}',
                                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                               ),
-                              if (item['varian_porsi'] != null)
+                              if (namaVarian != null)
                                 Text(
-                                  '${item['varian_porsi']} • ${item['tingkat_kepedasan'] ?? ''}',
+                                  tingkatPedas == null
+                                      ? namaVarian
+                                      : '$namaVarian • $tingkatPedas',
                                   style: const TextStyle(fontSize: 11, color: Colors.grey),
                                 ),
                             ],
                           ),
                         ),
                         Text(
-                          TemaWarna.formatRupiah((item['harga'] as int? ?? 0) * (item['jumlah'] as int? ?? 1)),
+                          TemaWarna.formatRupiah(subtotalItem),
                           style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                         ),
                       ],
@@ -336,4 +356,3 @@ class _StepItem extends StatelessWidget {
     );
   }
 }
-

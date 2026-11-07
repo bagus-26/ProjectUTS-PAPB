@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../model/produk.dart';
@@ -13,10 +14,7 @@ import 'halaman_menu_favorit.dart';
 class HalamanRincianProduk extends StatefulWidget {
   final Produk produk;
 
-  const HalamanRincianProduk({
-    super.key,
-    required this.produk,
-  });
+  const HalamanRincianProduk({super.key, required this.produk});
 
   @override
   State<HalamanRincianProduk> createState() => _HalamanRincianProdukState();
@@ -27,7 +25,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
   final TextEditingController _catatanController = TextEditingController();
 
   late String _porsiTerpilih;
-  late String _kepedasanTerpilih;
+  String _tingkatPedasTerpilih = 'tidak_pedas';
   int _jumlah = 1;
   bool _sedangMenambah = false;
 
@@ -38,10 +36,6 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
     _porsiTerpilih = widget.produk.varianPorsi.isNotEmpty
         ? widget.produk.varianPorsi.first
         : 'Reguler';
-
-    _kepedasanTerpilih = widget.produk.tingkatKepedasan.isNotEmpty
-        ? widget.produk.tingkatKepedasan.first
-        : 'Tidak Pedas';
   }
 
   @override
@@ -52,13 +46,8 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
 
   /// Menghitung harga per unit berdasarkan porsi yang dipilih
   int get _hargaPerUnit {
-    int dasar = widget.produk.harga;
-    if (_porsiTerpilih.toLowerCase().contains('large') ||
-        _porsiTerpilih.toLowerCase().contains('jumbo') ||
-        _porsiTerpilih.toLowerCase().contains('double')) {
-      dasar += widget.produk.hargaTambahanLarge;
-    }
-    return dasar;
+    return widget.produk.harga +
+        widget.produk.tambahanHargaVarian(_porsiTerpilih);
   }
 
   /// Mengirim permintaan penambahan item ke server (POST /api/keranjang)
@@ -73,8 +62,9 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
       await _layanan.tambahKeKeranjang(
         produkId: widget.produk.id,
         jumlah: _jumlah,
-        varianPorsi: _porsiTerpilih,
-        tingkatKepedasan: _kepedasanTerpilih,
+        varianId: widget.produk.idVarian(_porsiTerpilih),
+        varianNama: _porsiTerpilih,
+        tingkatPedas: widget.produk.bisaPedas ? _tingkatPedasTerpilih : null,
         catatan: _catatanController.text.trim(),
       );
 
@@ -84,7 +74,9 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: TemaWarna.hitamTombol,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.greenAccent),
@@ -119,7 +111,9 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Gagal menambahkan item ke keranjang. Silakan coba lagi.'),
+          content: Text(
+            'Gagal menambahkan item ke keranjang. Silakan coba lagi.',
+          ),
         ),
       );
     } finally {
@@ -135,10 +129,6 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
   Widget build(BuildContext context) {
     final bool siapPesan = widget.produk.dapatDipesan;
     final bool isFavorit = FavoritLokal.berisi(widget.produk.id);
-    final String labelOpsiKhas = widget.produk.kategori.toLowerCase().contains('minum')
-        ? 'Pilihan Rasa / Es'
-        : 'Tingkat Kepedasan';
-
     return Scaffold(
       backgroundColor: TemaWarna.latarPutih,
       body: CustomScrollView(
@@ -185,11 +175,13 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.produk.gambar != null && widget.produk.gambar!.isNotEmpty
+                  widget.produk.gambar != null &&
+                          widget.produk.gambar!.isNotEmpty
                       ? Image.network(
                           widget.produk.gambar!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => _placeholderBesar(),
+                          errorBuilder: (context, error, stackTrace) =>
+                              _placeholderBesar(),
                         )
                       : _placeholderBesar(),
                   if (!siapPesan)
@@ -289,7 +281,9 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: siapPesan ? Colors.green.shade50 : Colors.red.shade50,
+                          color: siapPesan
+                              ? Colors.green.shade50
+                              : Colors.red.shade50,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -312,8 +306,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
 
                   // Deskripsi Produk (Boleh null sesuai spesifikasi)
                   Text(
-                    widget.produk.deskripsi ??
-                        'Sajian lezat dibuat dari bahan pilihan bermutu tinggi, siap menemani harimu.',
+                    widget.produk.deskripsi ?? 'Sajian lezat dibuat dari bahan pilihan bermutu tinggi, siap menemani harimu.',
                     style: const TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -340,14 +333,14 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                     spacing: 12,
                     children: widget.produk.varianPorsi.map((porsi) {
                       final bool isDipilih = _porsiTerpilih == porsi;
-                      final bool isExtra = porsi.toLowerCase().contains('large') ||
-                          porsi.toLowerCase().contains('jumbo') ||
-                          porsi.toLowerCase().contains('double');
+                      final tambahanHarga = widget.produk.tambahanHargaVarian(
+                        porsi,
+                      );
 
                       return ChoiceChip(
                         label: Text(
-                          isExtra
-                              ? '$porsi +${TemaWarna.formatRupiah(widget.produk.hargaTambahanLarge)}'
+                          tambahanHarga > 0
+                              ? '$porsi +${TemaWarna.formatRupiah(tambahanHarga)}'
                               : porsi,
                         ),
                         selected: isDipilih,
@@ -380,49 +373,61 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                   const SizedBox(height: 24),
 
                   // 2. Pilihan Tingkat Kepedasan / Rasa (Khas Domain 1)
-                  Text(
-                    labelOpsiKhas,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: TemaWarna.teksUtama,
+                  if (widget.produk.bisaPedas) ...[
+                    const Text(
+                      'Tingkat Kepedasan',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: TemaWarna.teksUtama,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    children: widget.produk.tingkatKepedasan.map((kepedasan) {
-                      final bool isDipilih = _kepedasanTerpilih == kepedasan;
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children:
+                          const {
+                            'tidak_pedas': 'Tidak Pedas',
+                            'sedang': 'Sedang',
+                            'pedas': 'Pedas',
+                            'sangat_pedas': 'Sangat Pedas',
+                          }.entries.map((opsi) {
+                            final isDipilih = _tingkatPedasTerpilih == opsi.key;
 
-                      return ChoiceChip(
-                        label: Text(kepedasan),
-                        selected: isDipilih,
-                        onSelected: siapPesan
-                            ? (selected) {
-                                if (selected) {
-                                  setState(() => _kepedasanTerpilih = kepedasan);
-                                }
-                              }
-                            : null,
-                        selectedColor: TemaWarna.hitamTombol,
-                        backgroundColor: TemaWarna.abuMuda,
-                        labelStyle: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDipilih ? Colors.white : TemaWarna.teksUtama,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                            color: isDipilih
-                                ? TemaWarna.hitamTombol
-                                : TemaWarna.garisAbu,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                            return ChoiceChip(
+                              label: Text(opsi.value),
+                              selected: isDipilih,
+                              onSelected: siapPesan
+                                  ? (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _tingkatPedasTerpilih = opsi.key;
+                                        });
+                                      }
+                                    }
+                                  : null,
+                              selectedColor: TemaWarna.hitamTombol,
+                              backgroundColor: TemaWarna.abuMuda,
+                              labelStyle: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isDipilih
+                                    ? Colors.white
+                                    : TemaWarna.teksUtama,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: isDipilih
+                                      ? TemaWarna.hitamTombol
+                                      : TemaWarna.garisAbu,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                    ),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -448,12 +453,8 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                       maxLength: 120,
                       style: const TextStyle(fontSize: 14),
                       decoration: const InputDecoration(
-                        hintText:
-                            'Contoh: tanpa es, gula pisah, atau sambal jangan terlalu pedas...',
-                        hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey,
-                        ),
+                        hintText: 'Contoh: tanpa es, gula pisah, atau sambal jangan terlalu pedas...',
+                        hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
                         contentPadding: EdgeInsets.all(14),
                         border: InputBorder.none,
                       ),
@@ -471,9 +472,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: const Border(
-            top: BorderSide(color: TemaWarna.garisAbu),
-          ),
+          border: const Border(top: BorderSide(color: TemaWarna.garisAbu)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withAlpha(10),
