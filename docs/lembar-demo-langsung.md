@@ -9,7 +9,7 @@ Pengganti video demo. Pertemuan 8 meminta demonstrasi satu alur yang diundi peng
 - [ ] `php artisan migrate:fresh --seed` agar data bersih, lalu `php artisan serve`.
 - [ ] Emulator hidup dan aplikasi sudah tersambung.
 - [ ] `SIMULASI_GALAT_500=false` dan `SIMULASI_LAMBAT_DETIK=0`.
-- [ ] `toko.jam_buka`–`toko.jam_tutup` mencakup waktu sesi (08.00–21.00 WIB).
+- [ ] Jam operasional toko diatur pukul **08.00–21.00 WIB** (`jam_buka = 08:00`, `jam_tutup = 21:00`).
 - [ ] Postman terbuka dengan koleksi dan variabel lingkungan yang benar.
 - [ ] Klien SQL (phpMyAdmin/MySQL Workbench) terbuka untuk memeriksa stok.
 
@@ -33,12 +33,20 @@ php artisan migrate:fresh --seed
 php artisan serve --host=0.0.0.0
 ```
 
-Sebelum menguji aturan jam buka, catat nilai awal `jam_buka` dan `jam_tutup` pada tabel `toko`. Setelah pengujian, pulihkan nilai yang dicatat; jangan mengasumsikan jam tutup awal selalu `21:00`.
+Atur jam toko ke nilai normal sebelum demo:
 
 ```bash
+php artisan tinker --execute 'DB::table("toko")->update(["jam_buka" => "08:00", "jam_tutup" => "21:00"]);'
+```
+
+Untuk menguji penolakan saat toko tutup, ubah sementara jam tutup ke `00:00`, lalu pulihkan jam operasional ke pukul 08.00–21.00:
+
+```bash
+# Uji checkout saat toko tutup.
 php artisan tinker --execute 'DB::table("toko")->update(["jam_tutup" => "00:00"]);'
-# Ganti JAM_TUTUP_AWAL dengan nilai yang dicatat sebelum pengujian.
-php artisan tinker --execute 'DB::table("toko")->update(["jam_tutup" => "JAM_TUTUP_AWAL"]);'
+
+# Pulihkan jam operasional toko.
+php artisan tinker --execute 'DB::table("toko")->update(["jam_buka" => "08:00", "jam_tutup" => "21:00"]);'
 ```
 
 ## Setelah demo
