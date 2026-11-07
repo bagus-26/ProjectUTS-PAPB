@@ -14,8 +14,11 @@ void main() {
       'stok': 10,
       'tersedia': true,
       'deskripsi': 'Kopi susu dingin',
-      'varian_porsi': ['Reguler', 'Large'],
-      'tingkat_kepedasan': ['Normal Ice', 'Less Ice'],
+      'bisa_pedas': true,
+      'varian': [
+        {'id': 1, 'nama': 'Reguler', 'tambahan_harga': 0},
+        {'id': 2, 'nama': 'Large', 'tambahan_harga': 5000},
+      ],
     };
 
     final produk = Produk.fromJson(json);
@@ -24,12 +27,15 @@ void main() {
     expect(produk.nama, 'Iced Latte');
     expect(produk.harga, 18000);
     expect(produk.dapatDipesan, true);
+    expect(produk.bisaPedas, true);
+    expect(produk.idVarian('Large'), 2);
+    expect(produk.tambahanHargaVarian('Large'), 5000);
     expect(produk.varianPorsi, contains('Large'));
-    expect(produk.tingkatKepedasan, contains('Less Ice'));
   });
 
-  testWidgets('PemilihJumlah menaikkan dan menurunkan angka secara benar',
-      (WidgetTester tester) async {
+  testWidgets('PemilihJumlah menaikkan dan menurunkan angka secara benar', (
+    WidgetTester tester,
+  ) async {
     int nilai = 2;
 
     await tester.pumpWidget(
@@ -59,8 +65,9 @@ void main() {
     expect(nilai, 3);
   });
 
-  testWidgets('ChipKategori menampilkan daftar kategori',
-      (WidgetTester tester) async {
+  testWidgets('ChipKategori menampilkan daftar kategori', (
+    WidgetTester tester,
+  ) async {
     String terpilih = 'Semua';
 
     await tester.pumpWidget(

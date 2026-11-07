@@ -117,7 +117,7 @@ Keputusan di bawah ini sudah dipilih agar tim tidak berdebat di tengah jalan. Ub
 | ID | Keputusan | Alasan |
 |---|---|---|
 | D-01 | Nama jalur endpoint **tidak diganti** (`/api/produk`, dst.) | Mengurangi risiko dokumentasi tidak cocok dengan kode |
-| D-02 | Identitas pembeli lewat **dua token statis** (`Authorization: Bearer kelompok1-token-statis` untuk pelanggan 1, dan `...-statis-2` untuk pelanggan 2). Middleware `PelangganStatis` memetakan token ke `pelanggan_id`. Token salah atau kosong → 401 | Pelanggan ke-2 diperlukan untuk memperagakan "dua pembeli berebut unit terakhir" |
+| D-02 | Identitas pembeli lewat **dua token statis** (`Authorization: Bearer <token pelanggan>`), satu token untuk tiap pelanggan. Middleware `PelangganStatis` memetakan token ke `pelanggan_id`. Token salah atau kosong menghasilkan 401 | Pelanggan ke-2 diperlukan untuk memperagakan "dua pembeli berebut unit terakhir" |
 | D-03 | Pembungkus: `status`, `code` (**string**, mengikuti contoh PDF), `message`, `data`, dan `errors` (khusus 422). Respons gagal selalu memuat `data` (null atau rincian) | Satu fungsi di Flutter cukup untuk membaca semua respons |
 | D-04 | Jam tutup → **409** dengan `data.alasan = "toko_tutup"` | 409 berarti "bertentangan dengan keadaan server", dan Flutter sudah dipetakan menampilkan pesan server tanpa pindah halaman |
 | D-05 | Checkout dengan keranjang kosong → 409 | Sama dengan D-04 |
@@ -273,7 +273,7 @@ Permintaan:
 ```http
 POST /api/checkout
 X-Kunci-Idempoten: 3f1c...(uuid)
-Authorization: Bearer kelompok1-token-statis
+Authorization: Bearer <token pelanggan>
 { "nama_penerima": "Budi Santoso", "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
   "kurir_id": 2, "metode_pembayaran": "transfer_manual" }
 ```

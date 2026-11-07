@@ -6,7 +6,7 @@ Status: **dibekukan pada Hari 1** (4 November 2026) berdasarkan `docs/PRD.md` ve
 
 - Pembungkus sukses: `status`, `code` (string), `message`, `data`.
 - Pembungkus gagal: `status`, `code` (string), `message`, `data`, ditambah `errors` khusus 422.
-- Identitas pembeli: `Authorization: Bearer <token>` melalui middleware `PelangganStatis`.
+- Identitas pembeli: `Authorization: Bearer <token pelanggan>` melalui middleware `PelangganStatis`.
 - 16 endpoint: 14 wajib + `GET /api/kategori` + `GET /api/metode-pembayaran`.
 - Kode status: 200, 201, 401, 404, 409, 422, 500.
 - Checkout wajib `X-Kunci-Idempoten`, atomik, dan menyalin harga ke detail pesanan.

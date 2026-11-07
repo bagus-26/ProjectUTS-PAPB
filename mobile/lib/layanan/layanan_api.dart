@@ -249,27 +249,27 @@ class LayananApi {
       'id': 101,
       'produk_id': 1,
       'nama': 'Iced Latte',
-      'harga': 18000,
+      'harga_satuan': 18000,
       'jumlah': 1,
-      'varian_porsi': 'Reguler',
-      'tingkat_kepedasan': 'Sedang',
+      'varian': {'id': 1, 'nama': 'Reguler', 'tambahan_harga': 0},
+      'tingkat_pedas': null,
       'catatan': 'Less ice',
       'gambar':
           'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80',
-      'subtotal_item': 18000,
+      'subtotal': 18000,
     },
     {
       'id': 102,
       'produk_id': 2,
       'nama': 'Chicken Rice Bowl',
-      'harga': 28000,
+      'harga_satuan': 28000,
       'jumlah': 1,
-      'varian_porsi': 'Reguler',
-      'tingkat_kepedasan': 'Tidak Pedas',
+      'varian': {'id': 2, 'nama': 'Reguler', 'tambahan_harga': 0},
+      'tingkat_pedas': 'tidak_pedas',
       'catatan': 'Sambal dipisah',
       'gambar':
           'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80',
-      'subtotal_item': 28000,
+      'subtotal': 28000,
     },
   ];
 
@@ -409,16 +409,17 @@ class LayananApi {
   Future<Map<String, dynamic>> tambahKeKeranjang({
     required int produkId,
     required int jumlah,
-    String? varianPorsi,
-    String? tingkatKepedasan,
+    int? varianId,
+    String? varianNama,
+    String? tingkatPedas,
     String? catatan,
   }) async {
     final uri = Uri.parse('$baseUrl/keranjang');
     final payload = {
       'produk_id': produkId,
       'jumlah': jumlah,
-      'varian_porsi': ?varianPorsi,
-      'tingkat_kepedasan': ?tingkatKepedasan,
+      'varian_id': ?varianId,
+      'tingkat_pedas': ?tingkatPedas,
       if (catatan != null && catatan.isNotEmpty) 'catatan': catatan,
     };
 
@@ -441,8 +442,9 @@ class LayananApi {
         return _mockTambahKeKeranjang(
           produkId: produkId,
           jumlah: jumlah,
-          varianPorsi: varianPorsi,
-          tingkatKepedasan: tingkatKepedasan,
+          varianId: varianId,
+          varianNama: varianNama,
+          tingkatPedas: tingkatPedas,
           catatan: catatan,
         );
       }
@@ -454,8 +456,9 @@ class LayananApi {
         return _mockTambahKeKeranjang(
           produkId: produkId,
           jumlah: jumlah,
-          varianPorsi: varianPorsi,
-          tingkatKepedasan: tingkatKepedasan,
+          varianId: varianId,
+          varianNama: varianNama,
+          tingkatPedas: tingkatPedas,
           catatan: catatan,
         );
       }
@@ -466,8 +469,9 @@ class LayananApi {
         return _mockTambahKeKeranjang(
           produkId: produkId,
           jumlah: jumlah,
-          varianPorsi: varianPorsi,
-          tingkatKepedasan: tingkatKepedasan,
+          varianId: varianId,
+          varianNama: varianNama,
+          tingkatPedas: tingkatPedas,
           catatan: catatan,
         );
       }
@@ -621,8 +625,9 @@ class LayananApi {
   Future<Map<String, dynamic>> _mockTambahKeKeranjang({
     required int produkId,
     required int jumlah,
-    String? varianPorsi,
-    String? tingkatKepedasan,
+    int? varianId,
+    String? varianNama,
+    String? tingkatPedas,
     String? catatan,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
@@ -638,8 +643,17 @@ class LayananApi {
     }
 
     // Tambah / update keranjang
-    final cartIdx = _dataMockKeranjang
-        .indexWhere((k) => k['produk_id'] == produkId);
+    final namaVarian = varianNama ?? 'Reguler';
+    final cartIdx = _dataMockKeranjang.indexWhere((item) {
+      final varian = item['varian'];
+
+      return item['produk_id'] == produkId &&
+          varian is Map &&
+          varian['id'] == varianId &&
+          varian['nama'] == namaVarian &&
+          item['tingkat_pedas'] == tingkatPedas &&
+          item['catatan'] == (catatan ?? '');
+    });
     if (cartIdx >= 0) {
       final currentJumlah = _dataMockKeranjang[cartIdx]['jumlah'] as int;
       final totalBaru = currentJumlah + jumlah;
@@ -648,20 +662,24 @@ class LayananApi {
             'Jumlah item melebihi sisa stok (${targetProduk.stok}).');
       }
       _dataMockKeranjang[cartIdx]['jumlah'] = totalBaru;
-      _dataMockKeranjang[cartIdx]['subtotal_item'] =
+      _dataMockKeranjang[cartIdx]['subtotal'] =
           totalBaru * targetProduk.harga;
     } else {
       _dataMockKeranjang.add({
         'id': 100 + _dataMockKeranjang.length + 1,
         'produk_id': targetProduk.id,
         'nama': targetProduk.nama,
-        'harga': targetProduk.harga,
+        'harga_satuan': targetProduk.harga,
         'jumlah': jumlah,
-        'varian_porsi': varianPorsi ?? 'Reguler',
-        'tingkat_kepedasan': tingkatKepedasan ?? 'Tidak Pedas',
+        'varian': {
+          'id': varianId,
+          'nama': namaVarian,
+          'tambahan_harga': 0,
+        },
+        'tingkat_pedas': tingkatPedas,
         'catatan': catatan ?? '',
         'gambar': targetProduk.gambar,
-        'subtotal_item': targetProduk.harga * jumlah,
+        'subtotal': targetProduk.harga * jumlah,
       });
     }
 
@@ -672,16 +690,20 @@ class LayananApi {
     int subtotal = 0;
     int totalItem = 0;
     for (final item in _dataMockKeranjang) {
-      final sub = (item['subtotal_item'] as int?) ??
-          ((item['harga'] as int) * (item['jumlah'] as int));
+      final sub = (item['subtotal'] as int?) ??
+          ((item['harga_satuan'] as int) * (item['jumlah'] as int));
       subtotal += sub;
       totalItem += (item['jumlah'] as int);
     }
 
     return {
       'items': List<Map<String, dynamic>>.from(_dataMockKeranjang),
-      'subtotal': subtotal,
-      'total_item': totalItem,
+      'jumlah_item': totalItem,
+      'ringkasan': {
+        'subtotal': subtotal,
+        'ongkos_kirim': null,
+        'total': null,
+      },
     };
   }
 }

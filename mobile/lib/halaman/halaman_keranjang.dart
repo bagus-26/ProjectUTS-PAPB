@@ -51,7 +51,10 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
               .toList() ??
           [];
 
-      final sub = (data['subtotal'] as int?) ?? 0;
+      final ringkasan = data['ringkasan'];
+      final sub = ringkasan is Map
+          ? (ringkasan['subtotal'] as int?) ?? 0
+          : 0;
 
       setState(() {
         _daftarItem = items;
@@ -75,14 +78,14 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
 
   void _ubahJumlah(int index, int jumlahBaru) {
     setState(() {
-      final harga = _daftarItem[index]['harga'] as int;
+      final harga = _daftarItem[index]['harga_satuan'] as int;
       _daftarItem[index]['jumlah'] = jumlahBaru;
-      _daftarItem[index]['subtotal_item'] = harga * jumlahBaru;
+      _daftarItem[index]['subtotal'] = harga * jumlahBaru;
 
       // Hitung ulang subtotal server-side simulation
       _subtotal = _daftarItem.fold<int>(
         0,
-        (sum, item) => sum + ((item['subtotal_item'] as int?) ?? 0),
+        (sum, item) => sum + ((item['subtotal'] as int?) ?? 0),
       );
     });
   }
@@ -92,7 +95,7 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
       _daftarItem.removeAt(index);
       _subtotal = _daftarItem.fold<int>(
         0,
-        (sum, item) => sum + ((item['subtotal_item'] as int?) ?? 0),
+        (sum, item) => sum + ((item['subtotal'] as int?) ?? 0),
       );
       if (_daftarItem.isEmpty) {
         _keadaan = KeadaanMuat.kosong;
@@ -204,10 +207,20 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
 
   Widget _kartuItemKeranjang(Map<String, dynamic> item, int index) {
     final nama = item['nama']?.toString() ?? 'Menu';
-    final harga = (item['harga'] as int?) ?? 0;
+    final harga = (item['harga_satuan'] as int?) ?? 0;
     final jumlah = (item['jumlah'] as int?) ?? 1;
-    final porsi = item['varian_porsi']?.toString() ?? 'Reguler';
-    final kepedasan = item['tingkat_kepedasan']?.toString() ?? 'Tidak Pedas';
+    final varian = item['varian'];
+    final namaVarian =
+        varian is Map ? varian['nama']?.toString() : null;
+    final porsi = namaVarian ?? 'Reguler';
+    final tingkatPedas = item['tingkat_pedas']?.toString();
+    final kepedasan = switch (tingkatPedas) {
+      'tidak_pedas' => 'Tidak Pedas',
+      'sedang' => 'Sedang',
+      'pedas' => 'Pedas',
+      'sangat_pedas' => 'Sangat Pedas',
+      _ => null,
+    };
     final gambar = item['gambar']?.toString();
 
     return Container(
@@ -263,7 +276,7 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '$porsi • $kepedasan',
+                  kepedasan == null ? porsi : '$porsi • $kepedasan',
                   style: const TextStyle(
                     fontSize: 12,
                     color: TemaWarna.teksSekunder,

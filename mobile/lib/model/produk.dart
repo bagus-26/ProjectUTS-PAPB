@@ -1,3 +1,5 @@
+import 'varian_produk.dart';
+
 /// Model data Produk Makanan & Minuman Siap Saji (Kelompok 1)
 /// Sesuai kontrak basis data dan atribut khas domain
 class Produk {
@@ -8,6 +10,8 @@ class Produk {
   final int stok;
   final bool tersedia;
   final String? deskripsi;
+  final bool bisaPedas;
+  final List<VarianProduk> varian;
 
   // Atribut Khas Domain Kelompok 1 (Makanan & Minuman)
   final List<String> varianPorsi;
@@ -28,8 +32,15 @@ class Produk {
     required this.stok,
     required this.tersedia,
     this.deskripsi,
+    this.bisaPedas = false,
+    this.varian = const [],
     this.varianPorsi = const ['Reguler', 'Large'],
-    this.tingkatKepedasan = const ['Tidak Pedas', 'Sedang', 'Pedas', 'Extra Pedas'],
+    this.tingkatKepedasan = const [
+      'Tidak Pedas',
+      'Sedang',
+      'Pedas',
+      'Extra Pedas',
+    ],
     this.catatan,
     this.gambar,
     this.rating = 4.8,
@@ -39,6 +50,35 @@ class Produk {
 
   /// Cek apakah produk siap dipesan (stok > 0 dan berstatus tersedia)
   bool get dapatDipesan => tersedia && stok > 0;
+
+  VarianProduk? varianDenganNama(String nama) {
+    for (final item in varian) {
+      if (item.nama == nama) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
+  int? idVarian(String nama) {
+    return varianDenganNama(nama)?.id;
+  }
+
+  int tambahanHargaVarian(String nama) {
+    final pilihan = varianDenganNama(nama);
+    if (pilihan != null) {
+      return pilihan.tambahanHarga;
+    }
+
+    if (nama.toLowerCase().contains('large') ||
+        nama.toLowerCase().contains('jumbo') ||
+        nama.toLowerCase().contains('double')) {
+      return hargaTambahanLarge;
+    }
+
+    return 0;
+  }
 
   /// Konversi dari JSON response server Laravel
   factory Produk.fromJson(Map<String, dynamic> json) {
@@ -57,15 +97,15 @@ class Produk {
     final harga = hargaRaw is int
         ? hargaRaw
         : (hargaRaw is num
-            ? hargaRaw.toInt()
-            : int.tryParse(hargaRaw?.toString() ?? '') ?? 0);
+              ? hargaRaw.toInt()
+              : int.tryParse(hargaRaw?.toString() ?? '') ?? 0);
 
     final stokRaw = json['stok'];
     final stok = stokRaw is int
         ? stokRaw
         : (stokRaw is num
-            ? stokRaw.toInt()
-            : int.tryParse(stokRaw?.toString() ?? '') ?? 0);
+              ? stokRaw.toInt()
+              : int.tryParse(stokRaw?.toString() ?? '') ?? 0);
 
     // Parse Tersedia
     final tersediaRaw = json['tersedia'];
@@ -79,9 +119,19 @@ class Produk {
     // Deskripsi (boleh null sesuai spesifikasi)
     final deskripsi = json['deskripsi']?.toString();
 
+    final varianRaw = json['varian'];
+    final varian = varianRaw is List
+        ? varianRaw
+              .whereType<Map<String, dynamic>>()
+              .map(VarianProduk.fromJson)
+              .toList()
+        : <VarianProduk>[];
+
     // Parse Varian Porsi khas Domain 1
     List<String> varianPorsi = const ['Reguler', 'Large'];
-    if (json['varian_porsi'] != null) {
+    if (varian.isNotEmpty) {
+      varianPorsi = varian.map((item) => item.nama).toList();
+    } else if (json['varian_porsi'] != null) {
       if (json['varian_porsi'] is List) {
         varianPorsi = (json['varian_porsi'] as List)
             .map((e) => e.toString().trim())
@@ -97,7 +147,12 @@ class Produk {
     }
 
     // Parse Tingkat Kepedasan khas Domain 1
-    List<String> tingkatKepedasan = const ['Tidak Pedas', 'Sedang', 'Pedas', 'Extra Pedas'];
+    List<String> tingkatKepedasan = const [
+      'Tidak Pedas',
+      'Sedang',
+      'Pedas',
+      'Extra Pedas',
+    ];
     if (json['tingkat_kepedasan'] != null) {
       if (json['tingkat_kepedasan'] is List) {
         tingkatKepedasan = (json['tingkat_kepedasan'] as List)
@@ -134,6 +189,12 @@ class Produk {
       stok: stok,
       tersedia: tersedia,
       deskripsi: deskripsi,
+      bisaPedas:
+          json['bisa_pedas'] == true ||
+          json['bisa_pedas'] == 1 ||
+          json['bisa_pedas']?.toString().toLowerCase() == 'true' ||
+          json['bisa_pedas']?.toString() == '1',
+      varian: varian,
       varianPorsi: varianPorsi,
       tingkatKepedasan: tingkatKepedasan,
       catatan: json['catatan']?.toString(),
@@ -154,8 +215,8 @@ class Produk {
       'stok': stok,
       'tersedia': tersedia,
       if (deskripsi != null) 'deskripsi': deskripsi,
-      'varian_porsi': varianPorsi,
-      'tingkat_kepedasan': tingkatKepedasan,
+      'bisa_pedas': bisaPedas,
+      'varian': varian.map((item) => item.toJson()).toList(),
       if (catatan != null) 'catatan': catatan,
       if (gambar != null) 'gambar': gambar,
       'rating': rating,
@@ -172,6 +233,8 @@ class Produk {
     int? stok,
     bool? tersedia,
     String? deskripsi,
+    bool? bisaPedas,
+    List<VarianProduk>? varian,
     List<String>? varianPorsi,
     List<String>? tingkatKepedasan,
     String? catatan,
@@ -188,6 +251,8 @@ class Produk {
       stok: stok ?? this.stok,
       tersedia: tersedia ?? this.tersedia,
       deskripsi: deskripsi ?? this.deskripsi,
+      bisaPedas: bisaPedas ?? this.bisaPedas,
+      varian: varian ?? this.varian,
       varianPorsi: varianPorsi ?? this.varianPorsi,
       tingkatKepedasan: tingkatKepedasan ?? this.tingkatKepedasan,
       catatan: catatan ?? this.catatan,
@@ -198,4 +263,3 @@ class Produk {
     );
   }
 }
-
