@@ -4,6 +4,8 @@ Pengganti video demo. Pertemuan 8 meminta demonstrasi satu alur yang diundi peng
 
 ## Persiapan sebelum sesi
 
+> **Peringatan:** `migrate:fresh --seed` menghapus seluruh tabel dan data pada database yang dipilih sebelum menjalankan migrasi ulang. Jalankan hanya pada database lokal/demo yang boleh dihapus. Pastikan konfigurasi `.env` menunjuk ke database demo yang benar dan cadangkan data penting terlebih dahulu.
+
 - [ ] `php artisan migrate:fresh --seed` agar data bersih, lalu `php artisan serve`.
 - [ ] Emulator hidup dan aplikasi sudah tersambung.
 - [ ] `SIMULASI_GALAT_500=false` dan `SIMULASI_LAMBAT_DETIK=0`.
@@ -26,13 +28,17 @@ Pengganti video demo. Pertemuan 8 meminta demonstrasi satu alur yang diundi peng
 ## Perintah bantu
 
 ```bash
+# Jalankan hanya setelah memastikan database aktif adalah database demo yang boleh dihapus.
 php artisan migrate:fresh --seed
 php artisan serve --host=0.0.0.0
 ```
 
+Sebelum menguji aturan jam buka, catat nilai awal `jam_buka` dan `jam_tutup` pada tabel `toko`. Setelah pengujian, pulihkan nilai yang dicatat; jangan mengasumsikan jam tutup awal selalu `21:00`.
+
 ```bash
 php artisan tinker --execute 'DB::table("toko")->update(["jam_tutup" => "00:00"]);'
-php artisan tinker --execute 'DB::table("toko")->update(["jam_tutup" => "21:00"]);'
+# Ganti JAM_TUTUP_AWAL dengan nilai yang dicatat sebelum pengujian.
+php artisan tinker --execute 'DB::table("toko")->update(["jam_tutup" => "JAM_TUTUP_AWAL"]);'
 ```
 
 ## Setelah demo
