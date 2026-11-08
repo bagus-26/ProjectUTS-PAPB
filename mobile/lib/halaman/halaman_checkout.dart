@@ -1,105 +1,253 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
+
 import '../layanan/galat_api.dart';
+import '../layanan/layanan_api.dart';
+import '../model/isi_keranjang.dart';
+import '../model/kurir.dart';
+import '../model/metode_pembayaran.dart';
+import '../model/pesanan.dart';
+import '../model/ringkasan_keranjang.dart';
+import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
+import '../widget/tampilan_galat.dart';
+import '../widget/tampilan_kosong.dart';
+import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
 import 'halaman_detail_pesanan.dart';
 
-/// Halaman Checkout Transaksi (Kelompok 1)
-/// Menampilkan aturan bisnis jam operasional toko (08.00-22.00 WIB),
-/// pemilihan kurir internal, serta simulasi pembayaran COD / Transfer.
+/// Halaman Checkout (Kelompok 1: MakanYuk!)
+///
+/// Mengikuti PRD 7.1 & A5-03:
+/// * `GET /kurir`, `GET /metode-pembayaran`, `GET /keranjang?kurir_id=`
+///   (subtotal, ongkir, dan total **dihitung server** — D-06),
+/// * `POST /checkout` dengan header `X-Kunci-Idempoten` (PRD 7.4),
+/// * 422 tampil per kolom di bawah formulir, 409 tampil inline,
+/// * aturan jam buka **hanya** diputuskan server (409 `toko_tutup`),
+///   tidak pernah diblokir dari Flutter (K1),
+/// * 201 → `pushReplacement` ke Rincian Pesanan.
 class HalamanCheckout extends StatefulWidget {
-  final int subtotal;
-  final List<Map<String, dynamic>> items;
-
-  const HalamanCheckout({
-    super.key,
-    required this.subtotal,
-    required this.items,
-  });
+  const HalamanCheckout({super.key});
 
   @override
   State<HalamanCheckout> createState() => _HalamanCheckoutState();
 }
 
 class _HalamanCheckoutState extends State<HalamanCheckout> {
-  int _ongkosKirim = 8000;
-  final int _biayaLayanan = 2000;
-  final int _diskonOngkir = 2000;
-  String _metodeBayar = 'Tunai di Tempat (COD)';
-  bool _sedangMemproses = false;
+  final LayananApi _layanan = LayananApi();
+  final GlobalKey<FormState> _kunciForm = GlobalKey<FormState>();
+  final TextEditingController _namaController = TextEditingController();
+  final TextEditingController _alamatController = TextEditingController();
 
-  int get _totalBayar =>
-      widget.subtotal + _ongkosKirim + _biayaLayanan - _diskonOngkir;
+  /// Kunci idempoten dibuat **sekali per kunjungan** halaman (PRD 7.4).
+  /// Tombol coba lagi setelah galat sambungan/timeout memakai kunci yang sama,
+  /// sehingga retry tidak pernah membuat pesanan ganda.
+  final String _kunciIdempoten = const Uuid().v4();
 
-  /// Memeriksa apakah toko sedang dalam jam operasional (08:00 - 22:00 WIB)
-  bool _cekTokoBuka() {
-    final now = DateTime.now().toUtc().add(const Duration(hours: 7));
-    return now.hour >= 8 && now.hour < 22;
+  // Empat keadaan layar eksplisit (PRD 7.2)
+  KeadaanMuat _keadaan = KeadaanMuat.memuat;
+  GalatApi? _galat;
+
+  List<Kurir> _daftarKurir = [];
+  List<MetodePembayaran> _daftarMetode = [];
+
+  /// Isi keranjang + `ringkasan` (subtotal, ongkir, total) dari server.
+  IsiKeranjang? _keranjang;
+
+  int? _kurirTerpilihId;
+  String? _metodeTerpilih;
+
+  bool _sedangKirim = false;
+  bool _sedangSegarkanRingkasan = false;
+
+  /// Pesan galat 422 per kolom (PRD 7.3) untuk ditampilkan di bawah input.
+  Map<String, String> _galatPerKolom = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _muatDataAwal();
   }
 
+  @override
+  void dispose() {
+    _namaController.dispose();
+    _alamatController.dispose();
+    super.dispose();
+  }
+
+  /// Memuat `GET /kurir`, `GET /metode-pembayaran`, lalu
+  /// `GET /keranjang?kurir_id=` untuk ringkasan dari server.
+  Future<void> _muatDataAwal() async {
+    setState(() {
+      _keadaan = KeadaanMuat.memuat;
+      _galat = null;
+      _galatPerKolom = {};
+    });
+
+    try {
+      final kurir = await _layanan.ambilKurir();
+      final metode = await _layanan.ambilMetodePembayaran();
+      if (!mounted) return;
+
+      setState(() {
+        _daftarKurir = kurir.where((item) => item.aktif).toList();
+        _daftarMetode = metode.where((item) => item.aktif).toList();
+        if (_kurirTerpilihId == null && _daftarKurir.isNotEmpty) {
+          _kurirTerpilihId = _daftarKurir.first.id;
+        }
+        if (_metodeTerpilih == null && _daftarMetode.isNotEmpty) {
+          _metodeTerpilih = _daftarMetode.first.kode;
+        }
+      });
+
+      final isi = await _layanan.ambilKeranjang(kurirId: _kurirTerpilihId);
+      if (!mounted) return;
+
+      setState(() {
+        _keranjang = isi;
+        _keadaan = isi.kosong ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
+      });
+    } on GalatApi catch (g) {
+      if (!mounted) return;
+      setState(() {
+        _galat = g;
+        _keadaan = KeadaanMuat.galat;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _galat = GalatApi.umum();
+        _keadaan = KeadaanMuat.galat;
+      });
+    }
+  }
+
+  /// `GET /keranjang?kurir_id=` ulang setelah kurir diganti, sehingga
+  /// ongkos_kirim dan total **berubah mengikuti server** (D-06).
+  Future<void> _segarkanRingkasan() async {
+    if (_kurirTerpilihId == null || _sedangSegarkanRingkasan) return;
+
+    setState(() => _sedangSegarkanRingkasan = true);
+    try {
+      final isi = await _layanan.ambilKeranjang(kurirId: _kurirTerpilihId);
+      if (!mounted) return;
+      setState(() => _keranjang = isi);
+    } on GalatApi catch (g) {
+      _tampilkanGalat(g);
+    } catch (_) {
+      _tampilkanGalat(GalatApi.umum());
+    } finally {
+      if (mounted) setState(() => _sedangSegarkanRingkasan = false);
+    }
+  }
+
+  void _pilihKurir(Kurir kurir) {
+    if (_kurirTerpilihId == kurir.id) return;
+    setState(() => _kurirTerpilihId = kurir.id);
+    _segarkanRingkasan();
+  }
+
+  /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
   Future<void> _buatPesanan() async {
-    // Penegakan aturan bisnis khas Domain 1: Checkout ditolak di luar jam buka
-    if (!_cekTokoBuka()) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.store_mall_directory_rounded, color: Colors.orange),
-              SizedBox(width: 8),
-              Text('Toko Sedang Tutup'),
-            ],
-          ),
-          content: const Text(
-            'Mohon maaf, toko kami hanya melayani pesanan pada jam operasional 08.00 – 22.00 WIB. Silakan kembali lagi besok pagi.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Mengerti'),
-            ),
-          ],
-        ),
-      );
+    if (_sedangKirim) return;
+
+    if (!(_kunciForm.currentState?.validate() ?? false)) return;
+
+    if (_kurirTerpilihId == null || _metodeTerpilih == null) {
+      _tampilkanGalat(GalatApi.umum('Pilih kurir dan metode pembayaran dulu.'));
       return;
     }
 
-    setState(() => _sedangMemproses = true);
+    // Flag diset SEBELUM await agar satu ketukan tidak menjadi dua pesanan.
+    setState(() {
+      _sedangKirim = true;
+      _galatPerKolom = {};
+    });
 
     try {
-      // Simulasi delay POST /api/checkout dengan X-Kunci-Idempoten
-      await Future.delayed(const Duration(milliseconds: 800));
+      final Pesanan pesanan = await _layanan.buatCheckout(
+        namaPenerima: _namaController.text.trim(),
+        alamatPenerima: _alamatController.text.trim(),
+        kurirId: _kurirTerpilihId!,
+        metodePembayaran: _metodeTerpilih!,
+        kunciIdempoten: _kunciIdempoten,
+      );
 
       if (!mounted) return;
 
+      // 201 → Rincian Pesanan dengan tumpukan dibersihkan (PRD 7.1)
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => HalamanDetailPesanan(
-            nomorPesanan: 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-            items: widget.items,
-            totalBayar: _totalBayar,
-            metodeBayar: _metodeBayar,
+            pesananId: pesanan.id,
           ),
         ),
       );
-    } catch (_) {
+    } on GalatApi catch (g) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _tanganiGalatKirim(g);
+    } catch (_) {
+      _tampilkanGalat(GalatApi.umum());
+    } finally {
+      if (mounted) setState(() => _sedangKirim = false);
+    }
+  }
+
+  /// Memetakan galat `POST /checkout` ke tampilan yang sesuai (PRD 7.3):
+  /// 422 → pesan per kolom di bawah input; 409 → pesan server inline.
+  void _tanganiGalatKirim(GalatApi g) {
+    if (g.jenis == JenisGalat.validasi && g.errors != null) {
+      setState(() {
+        _galatPerKolom = g.errors!.map(
+          (kolom, pesan) => MapEntry(kolom, pesan.join('\n')),
+        );
+      });
+    }
+    _tampilkanGalat(g);
+  }
+
+  /// Pesan galat untuk ditampilkan inline (422 memakai pesan per kolom).
+  String _pesanGalat(GalatApi g) {
+    if (g.jenis == JenisGalat.validasi &&
+        g.errors != null &&
+        g.errors!.isNotEmpty) {
+      final rincian = g.errors!.values.expand((baris) => baris).join('\n');
+      if (rincian.isNotEmpty) return rincian;
+    }
+
+    // 409 toko_tutup: tampilkan jam operasional dari data server
+    if (g.jenis == JenisGalat.bentrok && g.data?['alasan'] == 'toko_tutup') {
+      final buka = g.data?['jam_buka']?.toString() ?? '08:00';
+      final tutup = g.data?['jam_tutup']?.toString() ?? '22:00';
+      return 'Toko sedang tutup. Pesanan hanya diproses pukul $buka – $tutup WIB.';
+    }
+
+    return g.pesan;
+  }
+
+  void _tampilkanGalat(GalatApi g) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
         SnackBar(
+          behavior: SnackBarBehavior.floating,
           backgroundColor: TemaWarna.merahHabis,
-          content: Text(GalatApi.galatServer().pesan),
+          duration: const Duration(seconds: 4),
+          content: Text(_pesanGalat(g)),
         ),
       );
-    } finally {
-      if (mounted) setState(() => _sedangMemproses = false);
-    }
+  }
+
+  void _kembaliKeKatalog() {
+    // Keranjang kosong → kembali ke katalog dengan tumpukan dibersihkan
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool tokoBuka = _cekTokoBuka();
-
     return Scaffold(
       backgroundColor: TemaWarna.latarKrem,
       appBar: AppBar(
@@ -116,325 +264,262 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         ),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+      body: _bangunIsi(),
+      bottomNavigationBar: _keadaan == KeadaanMuat.berhasil
+          ? _bangunBilahBawah()
+          : null,
+    );
+  }
+
+  Widget _bangunIsi() {
+    switch (_keadaan) {
+      case KeadaanMuat.memuat:
+        return const TampilanMuat(pesan: 'Menyiapkan halaman checkout...');
+
+      case KeadaanMuat.galat:
+        return TampilanGalat(
+          galat: _galat,
+          saatCobaLagi: _muatDataAwal,
+        );
+
+      case KeadaanMuat.kosong:
+        return TampilanKosong(
+          ikon: Icons.shopping_bag_outlined,
+          judul: 'Keranjang Belanja Kosong',
+          pesan:
+              'Tidak ada menu yang bisa dicheckout. Pilih menu dulu sebelum memesan.',
+          teksAksi: 'Pilih Menu Sekarang',
+          saatAksiDitekan: _kembaliKeKatalog,
+        );
+
+      case KeadaanMuat.berhasil:
+        return _bangunFormulir();
+    }
+  }
+
+  Widget _bangunFormulir() {
+    final isi = _keranjang!;
+    final ringkasan = isi.ringkasan;
+
+    return Form(
+      key: _kunciForm,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          // 1. Kartu Jam Operasional Toko (Domain 1 Aturan Khas)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: tokoBuka ? TemaWarna.garisAbu : Colors.red.shade200,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.access_time_rounded,
-                            size: 20, color: TemaWarna.cokelatUtama),
-                        SizedBox(width: 8),
-                        Text(
-                          'Jam Operasional Toko',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: TemaWarna.teksUtama,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tokoBuka ? Colors.green.shade50 : Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        tokoBuka ? '● Buka Sekarang' : '● Tutup',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: tokoBuka
-                              ? TemaWarna.hijauBuka
-                              : TemaWarna.merahHabis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '08.00 – 22.00 WIB',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: TemaWarna.cokelatUtama,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tokoBuka
-                      ? 'Pesanan akan segera diracik dan diantar oleh kurir toko.'
-                      : 'Pesanan di luar rentang jam operasional akan ditolak oleh sistem.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: TemaWarna.teksSekunder,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // 1. Kartu jam operasional (informasi; keputusan tetap di server)
+          _kartuJamOperasional(),
 
           const SizedBox(height: 14),
 
-          // 2. Alamat Pengiriman
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.location_on_outlined,
-                            size: 20, color: TemaWarna.cokelatUtama),
-                        SizedBox(width: 8),
-                        Text(
-                          'Alamat Pengiriman',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text('Ganti Alamat',
-                          style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-                const Text(
-                  'Budi Santoso • (+62 812-3456-7890)',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Jl. Mawar No. 12, RT 04 / RW 02, Klojen, Kota Malang, Jawa Timur 65111',
-                  style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: TemaWarna.latarKrem,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.chat_bubble_outline,
-                          size: 14, color: TemaWarna.cokelatMuda),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Catatan: Pagar warna hitam, titip pos sekuriti bila kosong',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: TemaWarna.cokelatTua,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // 2. Alamat pengiriman (Form + validator berbahasa Indonesia)
+          _kartuAlamat(),
 
           const SizedBox(height: 14),
 
-          // 3. Pilihan Kurir Internal Toko
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Pilih Kurir Pengantaran',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 10),
-                _pilihanKurir(
-                  tarif: 8000,
-                  nama: 'Kurir Internal - Reguler',
-                  estimasi: 'Estimasi 30–45 menit',
-                  badge: 'Standar',
-                  ikon: Icons.delivery_dining_rounded,
-                ),
-                const SizedBox(height: 8),
-                _pilihanKurir(
-                  tarif: 12000,
-                  nama: 'Kurir Internal - Kilat',
-                  estimasi: 'Estimasi 15–30 menit',
-                  badge: 'Cepat',
-                  ikon: Icons.bolt_rounded,
-                ),
-              ],
-            ),
-          ),
+          // 3. Pemilih kurir dari GET /kurir
+          _kartuKurir(),
 
           const SizedBox(height: 14),
 
-          // 4. Rincian Pembayaran
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Rincian Pembayaran',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                _barisRincian(
-                  'Subtotal Produk',
-                  TemaWarna.formatRupiah(widget.subtotal),
-                ),
-                _barisRincian(
-                  'Biaya Pengiriman',
-                  TemaWarna.formatRupiah(_ongkosKirim),
-                ),
-                _barisRincian(
-                  'Biaya Layanan & Penanganan',
-                  TemaWarna.formatRupiah(_biayaLayanan),
-                ),
-                _barisRincian(
-                  'Diskon Promo Ongkir',
-                  '-${TemaWarna.formatRupiah(_diskonOngkir)}',
-                  warnaNilai: Colors.green,
-                ),
-                const Divider(height: 20),
-                _barisRincian(
-                  'Total Pembayaran',
-                  TemaWarna.formatRupiah(_totalBayar),
-                  tebal: true,
-                ),
-              ],
-            ),
-          ),
+          // 4. Isi keranjang (data server)
+          _kartuItem(isi),
+
+          const SizedBox(height: 14),
+
+          // 5. Rincian pembayaran dari `ringkasan` server
+          _kartuRincian(ringkasan),
         ],
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: const Border(top: BorderSide(color: TemaWarna.garisAbu)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 10,
-              offset: const Offset(0, -3),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'TOTAL TAGIHAN',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: TemaWarna.teksSekunder,
-                        ),
-                      ),
-                      Text(
-                        TemaWarna.formatRupiah(_totalBayar),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: TemaWarna.teksUtama,
-                        ),
-                      ),
-                    ],
-                  ),
-                  DropdownButton<String>(
-                    value: _metodeBayar,
-                    underline: const SizedBox(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'Tunai di Tempat (COD)',
-                        child: Text('Tunai di Tempat (COD)',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Transfer Manual',
-                        child: Text('Transfer Manual',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) setState(() => _metodeBayar = val);
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TombolUtama(
-                teks: 'Buat Pesanan',
-                sedangMemuat: _sedangMemproses,
-                onPressed: _buatPesanan,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  Widget _pilihanKurir({
-    required int tarif,
-    required String nama,
-    required String estimasi,
-    required String badge,
-    required IconData ikon,
-  }) {
-    final bool terpilih = _ongkosKirim == tarif;
+  Widget _kartuJamOperasional() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: TemaWarna.garisAbu),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.access_time_rounded,
+                  size: 20, color: TemaWarna.cokelatUtama),
+              SizedBox(width: 8),
+              Text(
+                'Jam Operasional Toko',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: TemaWarna.teksUtama,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Sesuai jam operasional toko',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: TemaWarna.cokelatUtama,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Pesanan di luar rentang jam operasional akan ditolak oleh sistem.',
+            style: TextStyle(
+              fontSize: 12,
+              color: TemaWarna.teksSekunder,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuAlamat() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.location_on_outlined,
+                  size: 20, color: TemaWarna.cokelatUtama),
+              SizedBox(width: 8),
+              Text(
+                'Alamat Pengiriman',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _namaController,
+            textInputAction: TextInputAction.next,
+            enabled: !_sedangKirim,
+            decoration: _dekorasiInput(
+              label: 'Nama Penerima',
+              hint: 'Contoh: Budi Santoso',
+            ),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Nama penerima wajib diisi';
+              if (teks.length < 3) return 'Nama penerima terlalu pendek';
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _alamatController,
+            maxLines: 3,
+            enabled: !_sedangKirim,
+            decoration: _dekorasiInput(
+              label: 'Alamat Pengiriman',
+              hint: 'Contoh: Jl. Mawar No. 12, Klojen, Kota Malang',
+            ),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Alamat pengiriman wajib diisi';
+              if (teks.length < 10) {
+                return 'Alamat terlalu pendek, tuliskan detail alamat';
+              }
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _dekorasiInput({required String label, required String hint}) {
+    // Pesan galat 422 dari server tampil tepat di bawah kolomnya
+    final galat = _galatPerKolom[
+        label == 'Nama Penerima' ? 'nama_penerima' : 'alamat_penerima'];
+
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      errorText: galat,
+      labelStyle: const TextStyle(fontSize: 13, color: TemaWarna.teksSekunder),
+      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+      filled: true,
+      fillColor: TemaWarna.abuMuda,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TemaWarna.garisAbu),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TemaWarna.garisAbu),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TemaWarna.cokelatUtama, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: TemaWarna.merahHabis),
+      ),
+    );
+  }
+
+  void _bersihkanGalatKolom() {
+    if (_galatPerKolom.isEmpty) return;
+    setState(() => _galatPerKolom = {});
+  }
+
+  Widget _kartuKurir() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Pilih Kurir Pengantaran',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          if (_daftarKurir.isEmpty)
+            const Text(
+              'Belum ada kurir aktif. Hubungi toko untuk informasi lebih lanjut.',
+              style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
+            )
+          else
+            for (final kurir in _daftarKurir) ...[
+              _pilihanKurir(kurir),
+              const SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pilihanKurir(Kurir kurir) {
+    final bool terpilih = _kurirTerpilihId == kurir.id;
+    final bool mati = _sedangKirim || _sedangSegarkanRingkasan;
 
     return InkWell(
-      onTap: () => setState(() => _ongkosKirim = tarif),
+      onTap: mati ? null : () => _pilihKurir(kurir),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -442,7 +527,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
           color: terpilih ? Colors.white : TemaWarna.abuMuda,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: terpilih ? TemaWarna.hitamTombol : TemaWarna.garisAbu,
+            color: terpilih ? TemaWarna.cokelatUtama : TemaWarna.garisAbu,
             width: terpilih ? 1.5 : 1,
           ),
         ),
@@ -451,11 +536,11 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: terpilih ? TemaWarna.hitamTombol : Colors.white,
+                color: terpilih ? TemaWarna.cokelatUtama : Colors.white,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                ikon,
+                Icons.delivery_dining_rounded,
                 size: 20,
                 color: terpilih ? Colors.white : TemaWarna.cokelatUtama,
               ),
@@ -465,38 +550,16 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        nama,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          badge,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    kurir.nama,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    estimasi,
+                    kurir.wilayah,
                     style: const TextStyle(
                       fontSize: 11,
                       color: TemaWarna.teksSekunder,
@@ -506,7 +569,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               ),
             ),
             Text(
-              TemaWarna.formatRupiah(tarif),
+              formatRupiah(kurir.tarif),
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -517,8 +580,198 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               terpilih
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_off_rounded,
-              color: terpilih ? TemaWarna.hitamTombol : Colors.grey,
+              color: terpilih ? TemaWarna.cokelatUtama : Colors.grey,
               size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _kartuItem(IsiKeranjang isi) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Menu Pesanan',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '${isi.jumlahItem} item',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: TemaWarna.teksSekunder,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final item in isi.items) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    '${item.jumlah}x ${item.nama}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                Text(
+                  formatRupiah(item.subtotal),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuRincian(RingkasanKeranjang ringkasan) {
+    final bool sedangUbah = _sedangSegarkanRingkasan;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rincian Pembayaran',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          if (sedangUbah)
+            const LinearProgressIndicator(
+              color: TemaWarna.cokelatUtama,
+              minHeight: 2,
+            )
+          else ...[
+            _barisRincian(
+              'Subtotal Produk',
+              formatRupiah(ringkasan.subtotal),
+            ),
+            _barisRincian(
+              'Biaya Pengiriman',
+              ringkasan.ongkosKirim == null
+                  ? '—'
+                  : formatRupiah(ringkasan.ongkosKirim!),
+            ),
+            const Divider(height: 20),
+            _barisRincian(
+              'Total Pembayaran',
+              ringkasan.total == null
+                  ? '—'
+                  : formatRupiah(ringkasan.total!),
+              tebal: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _bangunBilahBawah() {
+    final ringkasan = _keranjang?.ringkasan;
+    final bool mati = _sedangKirim || _sedangSegarkanRingkasan;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: const Border(top: BorderSide(color: TemaWarna.garisAbu)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TOTAL TAGIHAN',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: TemaWarna.teksSekunder,
+                      ),
+                    ),
+                    Text(
+                      ringkasan?.total == null
+                          ? '—'
+                          : formatRupiah(ringkasan!.total!),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: TemaWarna.teksUtama,
+                      ),
+                    ),
+                  ],
+                ),
+                if (_daftarMetode.isNotEmpty)
+                  DropdownButton<String>(
+                    value: _daftarMetode
+                            .any((metode) => metode.kode == _metodeTerpilih)
+                        ? _metodeTerpilih
+                        : _daftarMetode.first.kode,
+                    underline: const SizedBox(),
+                    items: [
+                      for (final metode in _daftarMetode)
+                        DropdownMenuItem(
+                          value: metode.kode,
+                          child: Text(
+                            metode.nama,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                    onChanged: mati
+                        ? null
+                        : (nilai) {
+                            if (nilai != null) {
+                              setState(() => _metodeTerpilih = nilai);
+                            }
+                          },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TombolUtama(
+              teks: 'Buat Pesanan',
+              warnaLatar: TemaWarna.cokelatUtama,
+              sedangMemuat: _sedangKirim,
+              onPressed: mati ? null : _buatPesanan,
             ),
           ],
         ),

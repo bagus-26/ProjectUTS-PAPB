@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 
 /// Halaman Profil Pengguna (MakanYuk! - Kelompok 1)
 /// Sesuai UI rancangan Screenshot 12
@@ -103,7 +104,7 @@ class HalamanProfil extends StatelessWidget {
                       const Text('MakanYukPay',
                           style: TextStyle(fontSize: 11, color: Colors.grey)),
                       const SizedBox(height: 2),
-                      Text(TemaWarna.formatRupiah(182400),
+                      Text(formatRupiah(182400),
                           style: const TextStyle(
                               fontSize: 15, fontWeight: FontWeight.bold)),
                     ],

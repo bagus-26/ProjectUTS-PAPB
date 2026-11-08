@@ -6,6 +6,7 @@ import '../layanan/layanan_api.dart';
 import '../model/produk.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 import '../widget/bilah_pencarian.dart';
 import '../widget/chip_kategori.dart';
 import '../widget/kartu_produk.dart';
@@ -13,6 +14,7 @@ import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import 'halaman_keranjang.dart';
+import 'halaman_kelola_produk.dart';
 import 'halaman_menu_favorit.dart';
 import 'halaman_rincian_produk.dart';
 
@@ -20,7 +22,9 @@ import 'halaman_rincian_produk.dart';
 /// Sesuai Kriteria 2: Menggunakan GridView.builder, filter server via ?kategori= & ?cari=,
 /// serta 4 keadaan layar eksplisit (memuat, berhasil, kosong, galat).
 class HalamanKatalog extends StatefulWidget {
-  final VoidCallback? saatBukaKeranjang;
+  /// Membuka keranjang dari tab utama. Mengembalikan `Future` agar Katalog
+  /// bisa menyegarkan lencana `jumlah_item` setelah halaman keranjang ditutup.
+  final Future<void> Function()? saatBukaKeranjang;
 
   const HalamanKatalog({
     super.key,
@@ -44,14 +48,9 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   String _kataKunciCari = '';
   Timer? _debounceCari;
 
-  final List<String> _kategoriList = const [
-    'Semua',
-    'Minuman',
-    'Makanan',
-    'Snack',
-  ];
-
-  Map<String, int> _jumlahPerKategori = {};
+  /// Daftar kategori chip — bersumber dari `GET /api/kategori` (PRD 6 & 7.1).
+  /// 'Semua' selalu berada di depan sebagai keadaan tanpa penyaringan.
+  final List<String> _kategoriList = ['Semua'];
 
   // Status Keranjang Ringkas untuk Floating Bar
   int _totalItemKeranjang = 0;
@@ -61,6 +60,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   void initState() {
     super.initState();
     // Pemanggilan awal API dilakukan di initState (Ketentuan Sisi Flutter butir 5)
+    _muatKategori();
     _muatDataProduk();
     _muatStatusKeranjang();
   }
@@ -69,6 +69,30 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   void dispose() {
     _debounceCari?.cancel();
     super.dispose();
+  }
+
+  /// `GET /api/kategori` — chip filter kategori (PRD 7.1 & A4-06).
+  /// Bila gagal, chip tetap menampilkan 'Semua' agar katalog tetap terpakai;
+  /// penyaringan lewat server tetap berfungsi karena kategori lain menyusul
+  /// dipilih dari daftar yang berhasil dimuat.
+  Future<void> _muatKategori() async {
+    try {
+      final hasil = await _layanan.ambilKategori();
+      if (!mounted || hasil.isEmpty) return;
+      setState(() {
+        _kategoriList
+          ..clear()
+          ..addAll(['Semua', ...hasil]);
+        // Kategori terpilih bisa saja tidak ada lagi di daftar terbaru
+        if (!_kategoriList.contains(_kategoriTerpilih)) {
+          _kategoriTerpilih = 'Semua';
+        }
+      });
+    } on GalatApi {
+      // Chip bersifat pendukung: bila gagal, biarkan dengan 'Semua'.
+    } catch (_) {
+      // Galat tak terduga (mis. jaringan) tidak boleh menjatuhkan katalog.
+    }
   }
 
   /// Memanggil endpoint GET /api/produk?kategori=...&cari=...
@@ -86,15 +110,6 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
       );
 
       if (!mounted) return;
-
-      // Hitung ringkasan jumlah kategori jika sedang menampilkan 'Semua' tanpa pencarian
-      if (_kategoriTerpilih == 'Semua' && _kataKunciCari.isEmpty) {
-        final Map<String, int> mapCount = {'Semua': hasil.length};
-        for (final p in hasil) {
-          mapCount[p.kategori] = (mapCount[p.kategori] ?? 0) + 1;
-        }
-        _jumlahPerKategori = mapCount;
-      }
 
       setState(() {
         _daftarProduk = hasil;
@@ -125,15 +140,17 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     try {
       final keranjang = await _layanan.ambilKeranjang();
       if (!mounted) return;
-      final ringkasan = keranjang['ringkasan'];
       setState(() {
-        _totalItemKeranjang = (keranjang['jumlah_item'] as int?) ?? 0;
-        _subtotalKeranjang = ringkasan is Map
-            ? (ringkasan['subtotal'] as int?) ?? 0
-            : 0;
+        _totalItemKeranjang = keranjang.jumlahItem;
+        _subtotalKeranjang = keranjang.ringkasan.subtotal;
       });
-    } catch (_) {
-      // Diamkan jika keranjang belum aktif
+    } on GalatApi {
+      // Lencana bersifat pendukung: bila gagal dimuat, tampilkan tanpa lencana.
+      if (!mounted) return;
+      setState(() {
+        _totalItemKeranjang = 0;
+        _subtotalKeranjang = 0;
+      });
     }
   }
 
@@ -148,7 +165,8 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
 
   void _ubahKataKunci(String kataKunci) {
     _debounceCari?.cancel();
-    _debounceCari = Timer(const Duration(milliseconds: 350), () {
+    // Debounce ±400 ms (PRD 7.1 / Kriteria P1)
+    _debounceCari = Timer(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       setState(() {
         _kataKunciCari = kataKunci;
@@ -181,8 +199,6 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
         varianId: produk.varianPorsi.isNotEmpty
             ? produk.idVarian(produk.varianPorsi.first)
             : null,
-        varianNama:
-            produk.varianPorsi.isNotEmpty ? produk.varianPorsi.first : 'Reguler',
         tingkatPedas: produk.bisaPedas ? 'tidak_pedas' : null,
       );
 
@@ -208,18 +224,32 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     }
   }
 
-  void _navigasiKeKeranjang() {
+  Future<void> _navigasiKeKeranjang() async {
     if (widget.saatBukaKeranjang != null) {
-      widget.saatBukaKeranjang!();
+      await widget.saatBukaKeranjang!();
     } else {
-      Navigator.of(context)
-          .push(
-            MaterialPageRoute(
-              builder: (context) => const HalamanKeranjang(),
-            ),
-          )
-          .then((_) => _muatStatusKeranjang());
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const HalamanKeranjang(),
+        ),
+      );
     }
+
+    // Lencana jumlah_item selalu dibaca ulang dari server (PRD 7.1)
+    if (mounted) await _muatStatusKeranjang();
+  }
+
+  /// Alur PRD 7.1: Katalog → Kelola Produk. Data diperbarui saat kembali
+  /// karena CRUD produk bisa saja menambah, mengubah, atau menghapus menu.
+  Future<void> _bukaKelolaProduk() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const HalamanKelolaProduk()),
+    );
+    if (!mounted) return;
+    await Future.wait([
+      _muatKategori(),
+      _muatDataProduk(),
+    ]);
   }
 
   @override
@@ -264,6 +294,16 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
           ],
         ),
         actions: [
+          // Entri Katalog → Kelola Produk (PRD 7.1)
+          IconButton(
+            tooltip: 'Kelola Produk',
+            icon: const Icon(
+              Icons.storefront_outlined,
+              color: TemaWarna.teksUtama,
+              size: 25,
+            ),
+            onPressed: _bukaKelolaProduk,
+          ),
           // Ikon Keranjang dengan Lencana Jumlah (Kriteria 6 Spesifikasi)
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -313,8 +353,11 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
           RefreshIndicator(
             color: TemaWarna.cokelatUtama,
             onRefresh: () async {
-              await _muatDataProduk();
-              await _muatStatusKeranjang();
+              await Future.wait([
+                _muatKategori(),
+                _muatDataProduk(),
+                _muatStatusKeranjang(),
+              ]);
             },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -338,7 +381,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                       daftarKategori: _kategoriList,
                       kategoriTerpilih: _kategoriTerpilih,
                       saatDipilih: _ubahKategori,
-                      jumlahPerKategori: _jumlahPerKategori,
+                      modeIkon: true,
                     ),
                   ),
                 ),
@@ -515,7 +558,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                   ),
                 ),
                 Text(
-                  TemaWarna.formatRupiah(_subtotalKeranjang),
+                  formatRupiah(_subtotalKeranjang),
                   style: TextStyle(
                     color: Colors.white.withAlpha(200),
                     fontSize: 12,

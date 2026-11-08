@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../model/produk.dart';
+import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 import '../widget/pemilih_jumlah.dart';
 import '../widget/tombol_utama.dart';
+import '../widget/tampilan_galat.dart';
+import '../widget/tampilan_kosong.dart';
+import '../widget/tampilan_muat.dart';
 import 'halaman_menu_favorit.dart';
 
 /// Halaman Rincian Produk (Kelompok 1: Makanan & Minuman Siap Saji)
@@ -24,6 +29,13 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
   final LayananApi _layanan = LayananApi();
   final TextEditingController _catatanController = TextEditingController();
 
+  /// Data produk. Bisa diperbarui dari `GET /api/produk/{id}` (PRD 7.1).
+  late Produk _produk;
+
+  /// 4 keadaan layar eksplisit (PRD 7.2).
+  KeadaanMuat _keadaan = KeadaanMuat.memuat;
+  GalatApi? _galat;
+
   late String _porsiTerpilih;
   String _tingkatPedasTerpilih = 'tidak_pedas';
   int _jumlah = 1;
@@ -32,10 +44,15 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
   @override
   void initState() {
     super.initState();
+    _produk = widget.produk;
     // Inisialisasi atribut khas domain kelompok 1
-    _porsiTerpilih = widget.produk.varianPorsi.isNotEmpty
-        ? widget.produk.varianPorsi.first
+    _porsiTerpilih = _produk.varianPorsi.isNotEmpty
+        ? _produk.varianPorsi.first
         : 'Reguler';
+
+    // Sumber data resmi halaman ini adalah server (PRD 7.1: GET /produk/{id}),
+    // objek dari Katalog hanya dipakai agar layar tidak kosong saat memuat.
+    _muatRincian();
   }
 
   @override
@@ -44,15 +61,67 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
     super.dispose();
   }
 
-  /// Menghitung harga per unit berdasarkan porsi yang dipilih
-  int get _hargaPerUnit {
-    return widget.produk.harga +
-        widget.produk.tambahanHargaVarian(_porsiTerpilih);
+  /// `GET /api/produk/{id}` — menyegarkan atribut, varian, stok, dan status.
+  /// 404 dipetakan ke keadaan `kosong`, galat lain ke `galat` + coba lagi
+  /// (matriks penanganan galat PRD Bagian 7.3).
+  Future<void> _muatRincian() async {
+    setState(() {
+      _keadaan = KeadaanMuat.memuat;
+      _galat = null;
+    });
+
+    try {
+      final hasil = await _layanan.ambilRincianProduk(_produk.id);
+      if (!mounted) return;
+
+      setState(() {
+        _produk = hasil;
+        // Pilihan porsi bisa saja tidak ada lagi pada data terbaru
+        if (hasil.varianPorsi.isNotEmpty &&
+            !hasil.varianPorsi.contains(_porsiTerpilih)) {
+          _porsiTerpilih = hasil.varianPorsi.first;
+        }
+        _keadaan = KeadaanMuat.berhasil;
+      });
+    } on GalatApi catch (galat) {
+      if (!mounted) return;
+      setState(() {
+        _galat = galat;
+        _keadaan = galat.jenis == JenisGalat.tidakDitemukan
+            ? KeadaanMuat.kosong
+            : KeadaanMuat.galat;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _galat = GalatApi.umum();
+        _keadaan = KeadaanMuat.galat;
+      });
+    }
+  }
+
+  /// Tambahan harga varian yang sedang dipilih (lookup, **bukan** aritmetika
+  /// uang — penjumlahan `harga + tambahan` dilakukan server, PRD Bagian 6
+  /// langkah 2f & PM-10).
+  int get _tambahanTerpilih =>
+      _produk.tambahanHargaVarian(_porsiTerpilih);
+
+  /// Pesan galat untuk ditampilkan inline (PRD 7.3).
+  /// 422 menampilkan daftar galat per kolom, 409 memakai pesan dari server.
+  String _pesanGalat(GalatApi galat) {
+    if (galat.jenis == JenisGalat.validasi &&
+        galat.errors != null &&
+        galat.errors!.isNotEmpty) {
+      final rincian = galat.errors!.values.expand((baris) => baris).join('\n');
+      if (rincian.isNotEmpty) return rincian;
+    }
+
+    return galat.pesan;
   }
 
   /// Mengirim permintaan penambahan item ke server (POST /api/keranjang)
   Future<void> _tambahKeKeranjang() async {
-    if (!widget.produk.dapatDipesan) return;
+    if (!_produk.dapatDipesan) return;
 
     setState(() {
       _sedangMenambah = true;
@@ -60,11 +129,10 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
 
     try {
       await _layanan.tambahKeKeranjang(
-        produkId: widget.produk.id,
+        produkId: _produk.id,
         jumlah: _jumlah,
-        varianId: widget.produk.idVarian(_porsiTerpilih),
-        varianNama: _porsiTerpilih,
-        tingkatPedas: widget.produk.bisaPedas ? _tingkatPedasTerpilih : null,
+        varianId: _produk.idVarian(_porsiTerpilih),
+        tingkatPedas: _produk.bisaPedas ? _tingkatPedasTerpilih : null,
         catatan: _catatanController.text.trim(),
       );
 
@@ -83,7 +151,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '${widget.produk.nama} berhasil ditambahkan!',
+                  '${_produk.nama} berhasil ditambahkan!',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -100,11 +168,13 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
       Navigator.of(context).pop(true);
     } on GalatApi catch (galat) {
       if (!mounted) return;
+      // 409/422 tampil inline di layar yang sama, tanpa pindah halaman (PRD 7.3)
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: TemaWarna.merahHabis,
-          content: Text(galat.pesan),
+          duration: const Duration(seconds: 4),
+          content: Text(_pesanGalat(galat)),
         ),
       );
     } catch (_) {
@@ -127,8 +197,58 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
 
   @override
   Widget build(BuildContext context) {
-    final bool siapPesan = widget.produk.dapatDipesan;
-    final bool isFavorit = FavoritLokal.berisi(widget.produk.id);
+    // Empat keadaan layar eksplisit (PRD 7.2)
+    switch (_keadaan) {
+      case KeadaanMuat.memuat:
+        return _layarPendukung(
+          const TampilanMuat(pesan: 'Memuat rincian menu...'),
+        );
+
+      case KeadaanMuat.galat:
+        return _layarPendukung(
+          TampilanGalat(galat: _galat, saatCobaLagi: _muatRincian),
+        );
+
+      case KeadaanMuat.kosong:
+        // 404 dipetakan ke keadaan kosong, bukan galat (PRD 7.3)
+        return _layarPendukung(
+          TampilanKosong(
+            judul: 'Menu Tidak Ditemukan',
+            pesan: _galat?.pesan ??
+                'Menu yang kamu cari tidak tersedia atau sudah dihapus.',
+            teksAksi: 'Kembali',
+            saatAksiDitekan: () => Navigator.of(context).pop(),
+          ),
+        );
+
+      case KeadaanMuat.berhasil:
+        return _bangunIsi(context);
+    }
+  }
+
+  /// Layar sederhana (app bar + body) untuk keadaan memuat, galat, dan kosong.
+  Widget _layarPendukung(Widget isi) {
+    return Scaffold(
+      backgroundColor: TemaWarna.latarPutih,
+      appBar: AppBar(
+        backgroundColor: TemaWarna.latarPutih,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: TemaWarna.teksUtama,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: isi,
+    );
+  }
+
+  Widget _bangunIsi(BuildContext context) {
+    final bool siapPesan = _produk.dapatDipesan;
+    final bool isFavorit = FavoritLokal.berisi(_produk.id);
     return Scaffold(
       backgroundColor: TemaWarna.latarPutih,
       body: CustomScrollView(
@@ -164,7 +284,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                     ),
                     onPressed: () {
                       setState(() {
-                        FavoritLokal.alihkan(widget.produk.toJson());
+                        FavoritLokal.alihkan(_produk.toJson());
                       });
                     },
                   ),
@@ -175,15 +295,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.produk.gambar != null &&
-                          widget.produk.gambar!.isNotEmpty
-                      ? Image.network(
-                          widget.produk.gambar!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _placeholderBesar(),
-                        )
-                      : _placeholderBesar(),
+                  _placeholderBesar(),
                   if (!siapPesan)
                     Container(
                       color: Colors.black.withAlpha(140),
@@ -221,59 +333,63 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Nama Produk & Harga
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.produk.nama,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: TemaWarna.teksUtama,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        TemaWarna.formatRupiah(_hargaPerUnit),
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: TemaWarna.cokelatUtama,
-                        ),
-                      ),
-                    ],
+                  // Nama Produk & Harga (design Figma: nama di atas, harga di bawahnya)
+                  Text(
+                    _produk.nama,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: TemaWarna.teksUtama,
+                    ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _jumlah > 1
+                        ? '${formatRupiah(_produk.harga)} × $_jumlah'
+                        : formatRupiah(_produk.harga),
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: TemaWarna.cokelatUtama,
+                    ),
+                  ),
+                  // Tambahan varian ditampilkan terpisah, TANPA dijumlahkan
+                  // ke harga dasar (aritmetika uang dilarang di Dart — PM-10;
+                  // subtotal resmi dibaca dari ringkasan server)
+                  if (_tambahanTerpilih > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '+ ${formatRupiah(_tambahanTerpilih)} — varian '
+                      '$_porsiTerpilih'
+                      '${_jumlah > 1 ? ' × $_jumlah' : ''}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: TemaWarna.cokelatMuda,
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 8),
 
-                  // Rating, Terjual & Status Stok
+                  // Waktu Persiapan (atribut khas domain) & Status Stok
                   Row(
                     children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        color: TemaWarna.kuningBintang,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.produk.rating}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '(${widget.produk.terjual} terjual)',
-                        style: const TextStyle(
-                          fontSize: 14,
+                      if (_produk.waktuPersiapanMenit > 0) ...[
+                        const Icon(
+                          Icons.schedule_rounded,
                           color: TemaWarna.teksSekunder,
+                          size: 18,
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Disiapkan ${_produk.waktuPersiapanMenit} menit',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: TemaWarna.teksSekunder,
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -288,7 +404,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                         ),
                         child: Text(
                           siapPesan
-                              ? 'Stok: ${widget.produk.stok}'
+                              ? 'Stok: ${_produk.stok}'
                               : 'Tidak Tersedia',
                           style: TextStyle(
                             fontSize: 12,
@@ -306,7 +422,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
 
                   // Deskripsi Produk (Boleh null sesuai spesifikasi)
                   Text(
-                    widget.produk.deskripsi ?? 'Sajian lezat dibuat dari bahan pilihan bermutu tinggi, siap menemani harimu.',
+                    _produk.deskripsi ?? 'Sajian lezat dibuat dari bahan pilihan bermutu tinggi, siap menemani harimu.',
                     style: const TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -331,16 +447,16 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 12,
-                    children: widget.produk.varianPorsi.map((porsi) {
+                    children: _produk.varianPorsi.map((porsi) {
                       final bool isDipilih = _porsiTerpilih == porsi;
-                      final tambahanHarga = widget.produk.tambahanHargaVarian(
+                      final tambahanHarga = _produk.tambahanHargaVarian(
                         porsi,
                       );
 
                       return ChoiceChip(
                         label: Text(
                           tambahanHarga > 0
-                              ? '$porsi +${TemaWarna.formatRupiah(tambahanHarga)}'
+                              ? '$porsi +${formatRupiah(tambahanHarga)}'
                               : porsi,
                         ),
                         selected: isDipilih,
@@ -351,7 +467,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                                 }
                               }
                             : null,
-                        selectedColor: TemaWarna.hitamTombol,
+                        selectedColor: TemaWarna.cokelatUtama,
                         backgroundColor: TemaWarna.abuMuda,
                         labelStyle: TextStyle(
                           fontSize: 13,
@@ -362,7 +478,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
                             color: isDipilih
-                                ? TemaWarna.hitamTombol
+                                ? TemaWarna.cokelatUtama
                                 : TemaWarna.garisAbu,
                           ),
                         ),
@@ -373,7 +489,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                   const SizedBox(height: 24),
 
                   // 2. Pilihan Tingkat Kepedasan / Rasa (Khas Domain 1)
-                  if (widget.produk.bisaPedas) ...[
+                  if (_produk.bisaPedas) ...[
                     const Text(
                       'Tingkat Kepedasan',
                       style: TextStyle(
@@ -407,7 +523,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                                       }
                                     }
                                   : null,
-                              selectedColor: TemaWarna.hitamTombol,
+                              selectedColor: TemaWarna.cokelatUtama,
                               backgroundColor: TemaWarna.abuMuda,
                               labelStyle: TextStyle(
                                 fontSize: 13,
@@ -420,7 +536,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
                                   color: isDipilih
-                                      ? TemaWarna.hitamTombol
+                                      ? TemaWarna.cokelatUtama
                                       : TemaWarna.garisAbu,
                                 ),
                               ),
@@ -485,9 +601,11 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
           child: Row(
             children: [
               // Pemilih Jumlah (-) 1 (+)
+              // Sengaja TIDAK dibatasi stok dari sisi Flutter: server yang
+              // memutuskan, sehingga 409 `stok_kurang` bisa didemokan (PRD 7.1).
               PemilihJumlah(
                 nilai: _jumlah,
-                max: siapPesan ? widget.produk.stok : 1,
+                max: 99,
                 saatBerubah: siapPesan
                     ? (baru) {
                         setState(() => _jumlah = baru);
@@ -498,9 +616,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               // Tombol Tambah ke Keranjang
               Expanded(
                 child: TombolUtama(
-                  teks: siapPesan
-                      ? 'Tambah ke Keranjang • ${TemaWarna.formatRupiah(_hargaPerUnit * _jumlah)}'
-                      : 'Stok Habis',
+                  teks: siapPesan ? 'Tambah ke Keranjang' : 'Stok Habis',
                   warnaLatar: siapPesan
                       ? TemaWarna.cokelatUtama
                       : Colors.grey.shade400,
@@ -520,7 +636,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
       color: TemaWarna.kremTua,
       child: Center(
         child: Icon(
-          widget.produk.kategori.toLowerCase().contains('minum')
+          _produk.kategori.toLowerCase().contains('minum')
               ? Icons.local_cafe_rounded
               : Icons.restaurant_rounded,
           size: 72,

@@ -66,7 +66,7 @@ class TampilanKosong extends StatelessWidget {
               FilledButton.icon(
                 onPressed: saatAksiDitekan,
                 style: FilledButton.styleFrom(
-                  backgroundColor: TemaWarna.hitamTombol,
+                  backgroundColor: TemaWarna.cokelatUtama,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,

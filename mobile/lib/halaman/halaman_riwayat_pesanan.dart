@@ -1,109 +1,21 @@
 import 'package:flutter/material.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
+import '../model/pesanan.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import 'halaman_detail_pesanan.dart';
-
-/// Pengelola Riwayat Pesanan Lokal di Sisi Klien
-class RiwayatPesananLokal {
-  RiwayatPesananLokal._();
-
-  static final List<Map<String, dynamic>> _daftar = [
-    {
-      'id': 'ORD-984210',
-      'waktu': 'Hari ini, 14:35 WIB',
-      'status': 'Selesai',
-      'nama_utama': 'Iced Latte + 1 Menu lainnya',
-      'sub_item': 'Chicken Rice Bowl',
-      'total': 46000,
-      'jumlah_menu': 2,
-      'gambar':
-          'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80',
-      'items': [
-        {'nama': 'Iced Latte', 'harga': 18000, 'jumlah': 1, 'varian_porsi': 'Reguler', 'tingkat_kepedasan': 'Sedang'},
-        {'nama': 'Chicken Rice Bowl', 'harga': 28000, 'jumlah': 1, 'varian_porsi': 'Reguler', 'tingkat_kepedasan': 'Tidak Pedas'},
-      ],
-    },
-    {
-      'id': 'ORD-981203',
-      'waktu': '14 Nov 2025 • 16.20 WIB',
-      'status': 'Selesai',
-      'nama_utama': 'Iced Latte (Reguler)',
-      'sub_item': 'Gula aren, less ice',
-      'total': 18000,
-      'jumlah_menu': 1,
-      'gambar':
-          'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80',
-      'items': [
-        {'nama': 'Iced Latte', 'harga': 18000, 'jumlah': 1, 'varian_porsi': 'Reguler', 'tingkat_kepedasan': 'Less Ice'},
-      ],
-    },
-    {
-      'id': 'ORD-965311',
-      'waktu': '10 Nov 2025 • 09.15 WIB',
-      'status': 'Dibatalkan',
-      'nama_utama': 'Mochaccino',
-      'sub_item': 'Dibatalkan oleh pembeli',
-      'total': 20000,
-      'jumlah_menu': 1,
-      'gambar':
-          'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=500&q=80',
-      'items': [
-        {'nama': 'Mochaccino', 'harga': 20000, 'jumlah': 1, 'varian_porsi': 'Reguler', 'tingkat_kepedasan': 'Normal Sweet'},
-      ],
-    },
-  ];
-
-  static List<Map<String, dynamic>> get semua =>
-      List<Map<String, dynamic>>.unmodifiable(_daftar);
-
-  /// Menambahkan pesanan baru yang berhasil dibuat/diselesaikan
-  static void tambah({
-    required String nomorPesanan,
-    required List<Map<String, dynamic>> items,
-    required int totalBayar,
-    String status = 'Selesai',
-  }) {
-    final cleanId = nomorPesanan.replaceAll('#', '');
-    // Hindari duplikasi jika sudah ada
-    _daftar.removeWhere((p) => p['id'] == cleanId);
-
-    final namaUtama = items.isNotEmpty
-        ? (items.first['nama']?.toString() ?? 'Menu')
-        : 'Menu Pilihan';
-    final extra = items.length > 1 ? ' + ${items.length - 1} Menu lainnya' : '';
-    final subItem = items.length > 1
-        ? (items[1]['nama']?.toString() ?? '')
-        : (items.isNotEmpty ? (items[0]['catatan']?.toString() ?? '') : '');
-    final gambar = items.isNotEmpty ? (items.first['gambar']?.toString() ?? '') : '';
-
-    final now = DateTime.now();
-    final jam = now.hour.toString().padLeft(2, '0');
-    final menit = now.minute.toString().padLeft(2, '0');
-
-    _daftar.insert(0, {
-      'id': cleanId,
-      'waktu': 'Hari ini, $jam:$menit WIB',
-      'status': status,
-      'nama_utama': '$namaUtama$extra',
-      'sub_item': subItem.isNotEmpty ? subItem : 'Pesanan berhasil diselesaikan',
-      'total': totalBayar,
-      'jumlah_menu': items.length,
-      'gambar': gambar.isNotEmpty
-          ? gambar
-          : 'https://images.unsplash.com/photo-1517256064527-09c73fc73e38?w=500&q=80',
-      'items': List<Map<String, dynamic>>.from(items),
-    });
-  }
-}
+import 'halaman_utama.dart';
 
 /// Halaman Riwayat Pesanan (MakanYuk! - Kelompok 1)
-/// Sesuai Kriteria 6 & Spesifikasi Halaman Wajib: GET /api/pesanan
-/// Menampilkan daftar pesanan terurut dari yang terbaru beserta 4 keadaan layar eksplisit
+///
+/// Sesuai PRD 7.1 & A4-05: `GET /api/pesanan` (terbaru dahulu, diatur server),
+/// daftar + status, keadaan kosong, dan navigasi ke Rincian Pesanan.
+/// Tidak ada fixture lokal — seluruh data berasal dari server.
 class HalamanRiwayatPesanan extends StatefulWidget {
   final VoidCallback? saatPilihMenu;
 
@@ -115,10 +27,15 @@ class HalamanRiwayatPesanan extends StatefulWidget {
 
 class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
   final LayananApi _layanan = LayananApi();
+
+  // Empat keadaan layar eksplisit (PRD 7.2)
   KeadaanMuat _keadaan = KeadaanMuat.memuat;
-  String _filterTerpilih = 'Semua';
-  List<Map<String, dynamic>> _daftarPesanan = [];
+  List<Pesanan> _daftarPesanan = [];
   GalatApi? _galat;
+
+  String _filterTerpilih = 'Semua';
+  bool _bannerTampil = true;
+  bool _sedangPesanLagi = false;
 
   @override
   void initState() {
@@ -126,6 +43,7 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
     _muatRiwayat();
   }
 
+  /// `GET /api/pesanan` — daftar terbaru dahulu (diatur server).
   Future<void> _muatRiwayat() async {
     setState(() {
       _keadaan = KeadaanMuat.memuat;
@@ -133,10 +51,7 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
     });
 
     try {
-      // Ambil data riwayat pesanan (fallback otomatis ke RiwayatPesananLokal)
-      await Future.delayed(const Duration(milliseconds: 300));
-      final data = RiwayatPesananLokal.semua;
-
+      final data = await _layanan.ambilDaftarPesanan();
       if (!mounted) return;
 
       setState(() {
@@ -158,67 +73,75 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
     }
   }
 
-  void _bukaDetailPesanan(Map<String, dynamic> pesanan) {
-    final rawItems = pesanan['items'];
-    final List<Map<String, dynamic>> items = rawItems is List
-        ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
-        : [
-            {
-              'nama': pesanan['nama_utama']?.toString() ?? 'Menu',
-              'harga': pesanan['total'] as int? ?? 0,
-              'jumlah': 1,
-              'gambar': pesanan['gambar']?.toString(),
-            }
-          ];
-
+  void _bukaDetailPesanan(Pesanan pesanan) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => HalamanDetailPesanan(
-          nomorPesanan: '#${pesanan['id']}',
-          items: items,
-          totalBayar: pesanan['total'] as int? ?? 0,
-        ),
+        builder: (context) => HalamanDetailPesanan(pesananId: pesanan.id),
       ),
     );
   }
 
-  Future<void> _pesanLagi(Map<String, dynamic> pesanan) async {
-    final rawItems = pesanan['items'];
-    if (rawItems is List && rawItems.isNotEmpty) {
-      for (final item in rawItems) {
-        try {
-          final varian = item['varian'];
-          final rawTingkatPedas = item['tingkat_pedas']?.toString();
-          final tingkatPedas = const {
-            'tidak_pedas',
-            'sedang',
-            'pedas',
-            'sangat_pedas',
-          }.contains(rawTingkatPedas)
-              ? rawTingkatPedas
-              : null;
+  /// Kembali ke Katalog (dipakai saat halaman ini berdiri sendiri).
+  void _keKatalog() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HalamanUtama()),
+      (route) => false,
+    );
+  }
 
-          await _layanan.tambahKeKeranjang(
-            produkId: (item['produk_id'] as int?) ?? 1,
-            jumlah: (item['jumlah'] as int?) ?? 1,
-            varianId: varian is Map ? varian['id'] as int? : null,
-            varianNama: varian is Map
-                ? varian['nama']?.toString()
-                : item['varian_porsi']?.toString(),
-            tingkatPedas: tingkatPedas,
-          );
-        } catch (_) {}
+  /// "Pesan Lagi" — menambahkan item pesanan lama ke keranjang lewat
+  /// `POST /api/keranjang`. Galat per item dilaporkan, tidak ditelan diam-diam.
+  Future<void> _pesanLagi(Pesanan pesanan) async {
+    if (_sedangPesanLagi || pesanan.items.isEmpty) return;
+
+    setState(() => _sedangPesanLagi = true);
+
+    int berhasil = 0;
+    int dilewati = 0;
+    String? galatTerakhir;
+
+    for (final item in pesanan.items) {
+      if (item.produkId == null) {
+        dilewati++;
+        continue;
+      }
+
+      try {
+        await _layanan.tambahKeKeranjang(
+          produkId: item.produkId!,
+          jumlah: item.jumlah,
+          tingkatPedas: item.tingkatPedas,
+        );
+        berhasil++;
+      } on GalatApi catch (g) {
+        dilewati++;
+        galatTerakhir = g.pesan;
+      } catch (_) {
+        dilewati++;
       }
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: TemaWarna.hitamTombol,
-        content: Text('Menu dari pesanan #${pesanan['id']} dimasukkan ke keranjang!'),
-      ),
-    );
+    setState(() => _sedangPesanLagi = false);
+
+    final pesan = switch ((berhasil, dilewati)) {
+      (0, _) => galatTerakhir ?? 'Menu tidak dapat ditambahkan ke keranjang.',
+      (_, 0) => '$berhasil menu dimasukkan ke keranjang.',
+      _ => '$berhasil menu masuk keranjang, $dilewati dilewati. '
+            '${galatTerakhir ?? ''}',
+    };
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: berhasil > 0
+              ? TemaWarna.hitamTombol
+              : TemaWarna.merahHabis,
+          content: Text(pesan.trim()),
+        ),
+      );
   }
 
   @override
@@ -259,287 +182,349 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
           judul: 'Belum Ada Pesanan',
           pesan: 'Kamu belum pernah membuat pesanan makanan atau minuman.',
           teksAksi: 'Pesan Menu Sekarang',
-          saatAksiDitekan: widget.saatPilihMenu ??
-              () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                }
-              },
+          saatAksiDitekan: widget.saatPilihMenu ?? _keKatalog,
         );
 
       case KeadaanMuat.berhasil:
-        final pesananTampil = _filterTerpilih == 'Semua'
-            ? _daftarPesanan
-            : _daftarPesanan.where((p) => p['status'] == _filterTerpilih).toList();
+        return _bangunDaftar();
+    }
+  }
 
-        return RefreshIndicator(
-          color: TemaWarna.cokelatUtama,
-          onRefresh: _muatRiwayat,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Banner Keberhasilan Sesuai Screenshot 9
-              Container(
-                padding: const EdgeInsets.all(14),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: TemaWarna.garisAbu),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check_circle_outline_rounded,
-                        color: TemaWarna.hijauBuka,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Pesanan Berhasil Diselesaikan!',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: TemaWarna.teksUtama,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Terima kasih telah menikmati sajian MakanYuk!.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: TemaWarna.teksSekunder,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  Widget _bangunDaftar() {
+    final List<String> statusFilter = switch (_filterTerpilih) {
+      'Selesai' => const ['selesai'],
+      'Dibatalkan' => const ['dibatalkan'],
+      _ => const [],
+    };
+    final pesananTampil = statusFilter.isEmpty
+        ? _daftarPesanan
+        : _daftarPesanan
+            .where((p) => statusFilter.contains(p.status))
+            .toList();
 
-              // Filter status: Semua, Selesai, Dibatalkan
-              Row(
-                children: ['Semua', 'Selesai', 'Dibatalkan'].map((f) {
-                  final aktif = _filterTerpilih == f;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(f),
-                      selected: aktif,
-                      onSelected: (val) {
-                        if (val) setState(() => _filterTerpilih = f);
-                      },
-                      selectedColor: TemaWarna.hitamTombol,
-                      backgroundColor: Colors.white,
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: aktif ? Colors.white : TemaWarna.teksUtama,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        side: BorderSide(
-                          color: aktif ? TemaWarna.hitamTombol : TemaWarna.garisAbu,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+    return RefreshIndicator(
+      color: TemaWarna.cokelatUtama,
+      onRefresh: _muatRiwayat,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Banner keberhasilan (design Figma, bisa ditutup)
+          if (_bannerTampil) _bannerSelesai(),
 
-              const SizedBox(height: 16),
-
-              if (pesananTampil.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'Tidak ada pesanan berstatus $_filterTerpilih.',
-                      style: const TextStyle(color: TemaWarna.teksSekunder),
+          // Filter status: Semua, Selesai, Dibatalkan
+          Row(
+            children: ['Semua', 'Selesai', 'Dibatalkan'].map((f) {
+              final aktif = _filterTerpilih == f;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(f),
+                  selected: aktif,
+                  onSelected: (val) {
+                    if (val) setState(() => _filterTerpilih = f);
+                  },
+                  selectedColor: TemaWarna.cokelatUtama,
+                  backgroundColor: Colors.white,
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: aktif ? Colors.white : TemaWarna.teksUtama,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: BorderSide(
+                      color: aktif
+                          ? TemaWarna.cokelatUtama
+                          : TemaWarna.garisAbu,
                     ),
                   ),
-                )
-              else
-                ...pesananTampil.map((p) {
-                  final isSelesai = p['status'] == 'Selesai';
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(6),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${p['waktu']}\n#${p['id']}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: TemaWarna.teksSekunder,
-                                height: 1.4,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSelesai
-                                    ? Colors.green.shade50
-                                    : Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '● ${p['status']}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: isSelesai
-                                      ? TemaWarna.hijauBuka
-                                      : TemaWarna.merahHabis,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 20),
-                        InkWell(
-                          onTap: () => _bukaDetailPesanan(p),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: 56,
-                                  height: 56,
-                                  color: TemaWarna.kremTua,
-                                  child: Image.network(
-                                    p['gambar'] as String,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        const Icon(
-                                      Icons.restaurant_rounded,
-                                      color: TemaWarna.cokelatUtama,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      p['nama_utama'] as String,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: TemaWarna.teksUtama,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      p['sub_item'] as String,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${TemaWarna.formatRupiah(p['total'] as int)} • ${p['jumlah_menu']} Menu',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: TemaWarna.cokelatUtama,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                color: Colors.grey,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            if (isSelesai) ...[
-                              OutlinedButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Terima kasih atas ulasanmu!'),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.star_outline_rounded, size: 16),
-                                label: const Text(
-                                  'Beri Ulasan',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: TemaWarna.teksUtama,
-                                  side: const BorderSide(color: TemaWarna.garisAbu),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            FilledButton.icon(
-                              onPressed: () => _pesanLagi(p),
-                              icon: const Icon(Icons.refresh_rounded, size: 16),
-                              label: const Text(
-                                'Pesan Lagi',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: TemaWarna.hitamTombol,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                ),
+              );
+            }).toList(),
+          ),
+
+          const SizedBox(height: 16),
+
+          if (pesananTampil.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'Tidak ada pesanan berstatus $_filterTerpilih.',
+                  style: const TextStyle(color: TemaWarna.teksSekunder),
+                ),
+              ),
+            )
+          else
+            ...pesananTampil.map(_kartuPesanan),
+        ],
+      ),
+    );
+  }
+
+  Widget _bannerSelesai() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: TemaWarna.kremPeach,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: TemaWarna.hijauBuka,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pesanan Berhasil Diselesaikan!',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: TemaWarna.teksUtama,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Terima kasih telah menikmati sajian MakanYuk!.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: TemaWarna.teksSekunder,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Tutup',
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: TemaWarna.teksSekunder,
+            onPressed: () => setState(() => _bannerTampil = false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuPesanan(Pesanan pesanan) {
+    final bool selesai = pesanan.status == 'selesai';
+    final bool batal = pesanan.status == 'dibatalkan';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(6),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  '${_formatWaktu(pesanan.dibuatPada)}\n${pesanan.nomorPesanan}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: TemaWarna.teksSekunder,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              _lencanaStatus(pesanan, selesai: selesai, batal: batal),
             ],
           ),
-        );
-    }
+          const Divider(height: 20),
+          InkWell(
+            onTap: () => _bukaDetailPesanan(pesanan),
+            borderRadius: BorderRadius.circular(12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    color: TemaWarna.kremTua,
+                    child: const Icon(
+                      Icons.restaurant_rounded,
+                      color: TemaWarna.cokelatUtama,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _ringkasanMenu(pesanan),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: TemaWarna.teksUtama,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _subItem(pesanan),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${formatRupiah(pesanan.total)} • ${pesanan.items.length} Menu',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: TemaWarna.cokelatUtama,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (selesai) ...[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context)
+                      ..clearSnackBars()
+                      ..showSnackBar(
+                        const SnackBar(
+                          content: Text('Terima kasih atas ulasanmu!'),
+                        ),
+                      );
+                  },
+                  icon: const Icon(Icons.star_outline_rounded, size: 16),
+                  label: const Text(
+                    'Beri Ulasan',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: TemaWarna.teksUtama,
+                    side: const BorderSide(color: TemaWarna.garisAbu),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              FilledButton.icon(
+                onPressed:
+                    _sedangPesanLagi ? null : () => _pesanLagi(pesanan),
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text(
+                  'Pesan Lagi',
+                  style: TextStyle(fontSize: 12),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: TemaWarna.cokelatUtama,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lencanaStatus(
+    Pesanan pesanan, {
+    required bool selesai,
+    required bool batal,
+  }) {
+    final (warnaLatar, warnaTeks) = selesai
+        ? (Colors.green.shade50, TemaWarna.hijauBuka)
+        : batal
+            ? (Colors.red.shade50, TemaWarna.merahHabis)
+            : (Colors.orange.shade50, const Color(0xFFE67E22));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: warnaLatar,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '● ${pesanan.labelStatus}',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: warnaTeks,
+        ),
+      ),
+    );
+  }
+
+  /// Nama menu utama, mis. `Iced Latte + 1 Menu lainnya`.
+  String _ringkasanMenu(Pesanan pesanan) {
+    if (pesanan.items.isEmpty) return 'Pesanan ${pesanan.nomorPesanan}';
+
+    final pertama = pesanan.items.first.namaProduk;
+    final sisa = pesanan.items.length - 1;
+
+    return sisa > 0 ? '$pertama + $sisa Menu lainnya' : pertama;
+  }
+
+  String _subItem(Pesanan pesanan) {
+    if (pesanan.items.length > 1) return pesanan.items[1].namaProduk;
+
+    final catatan = pesanan.items.isEmpty
+        ? null
+        : pesanan.items.first.catatan?.trim();
+    if (catatan != null && catatan.isNotEmpty) return catatan;
+
+    return pesanan.namaMetode ?? pesanan.labelStatus;
+  }
+
+  /// Menampilkan `created_at` server tanpa bagian milidetik/zona.
+  String _formatWaktu(String? raw) {
+    if (raw == null || raw.isEmpty) return '-';
+
+    return raw.replaceFirst('T', ' ').split('.').first;
   }
 }
