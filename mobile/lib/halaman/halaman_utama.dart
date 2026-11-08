@@ -23,8 +23,8 @@ class _HalamanUtamaState extends State<HalamanUtama> {
     });
   }
 
-  void _bukaKeranjang() {
-    Navigator.of(context).push(
+  Future<void> _bukaKeranjang() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => HalamanKeranjang(
           saatPilihMenu: () {
@@ -42,7 +42,9 @@ class _HalamanUtamaState extends State<HalamanUtama> {
       HalamanKatalog(
         saatBukaKeranjang: _bukaKeranjang,
       ),
-      const HalamanRiwayatPesanan(),
+      HalamanRiwayatPesanan(
+        saatPilihMenu: () => _pindahKeTab(0),
+      ),
       const HalamanMenuFavorit(),
       const HalamanProfil(),
     ];

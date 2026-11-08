@@ -21,36 +21,48 @@ class ChipKategori extends StatelessWidget {
 
   IconData _ikonKategori(String nama) {
     final lower = nama.toLowerCase();
-    if (lower.contains('minum')) {
-      return Icons.local_cafe_outlined;
+    if (lower.contains('snack')) {
+      return Icons.cookie_outlined;
     } else if (lower.contains('makan')) {
       return Icons.restaurant_outlined;
-    } else if (lower.contains('snack')) {
-      return Icons.cookie_outlined;
+    } else if (lower.contains('minum')) {
+      return Icons.local_drink_outlined;
     }
-    return Icons.grid_view_rounded;
+    // 'Semua' dan kategori tak dikenal memakai ikon cangkir (design Figma)
+    return Icons.local_cafe_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     if (modeIkon) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: daftarKategori.map((kategori) {
-          final isTerpilih = kategoriTerpilih.toLowerCase() == kategori.toLowerCase();
-          return InkWell(
-            onTap: () => saatDipilih(kategori),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      // Mode ikon lingkaran sesuai layar Katalog pada design Figma:
+      // lingkaran krem + ikon cokelat, kategori terpilih terisi cokelat.
+      return SizedBox(
+        height: 92,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: daftarKategori.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 20),
+          itemBuilder: (context, index) {
+            final kategori = daftarKategori[index];
+            final isTerpilih =
+                kategoriTerpilih.toLowerCase() == kategori.toLowerCase();
+
+            return InkWell(
+              onTap: () => saatDipilih(kategori),
+              borderRadius: BorderRadius.circular(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
                     width: 58,
                     height: 58,
                     decoration: BoxDecoration(
-                      color: isTerpilih ? TemaWarna.hitamTombol : TemaWarna.kremTua,
+                      color: isTerpilih
+                          ? TemaWarna.cokelatUtama
+                          : TemaWarna.kremTua,
                       shape: BoxShape.circle,
                       boxShadow: isTerpilih
                           ? [
@@ -64,7 +76,8 @@ class ChipKategori extends StatelessWidget {
                     ),
                     child: Icon(
                       _ikonKategori(kategori),
-                      color: isTerpilih ? Colors.white : TemaWarna.cokelatUtama,
+                      color:
+                          isTerpilih ? Colors.white : TemaWarna.cokelatUtama,
                       size: 26,
                     ),
                   ),
@@ -73,15 +86,17 @@ class ChipKategori extends StatelessWidget {
                     kategori,
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: isTerpilih ? FontWeight.w700 : FontWeight.w500,
-                      color: isTerpilih ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
+                      fontWeight:
+                          isTerpilih ? FontWeight.w700 : FontWeight.w500,
+                      color:
+                          isTerpilih ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
                     ),
                   ),
                 ],
               ),
-            ),
-          );
-        }).toList(),
+            );
+          },
+        ),
       );
     }
 

@@ -13,6 +13,9 @@ class TemaWarna {
   static const Color latarKrem = Color(0xFFF9F6F0);
   static const Color latarPutih = Colors.white;
   static const Color kremTua = Color(0xFFEFE8DE);
+
+  /// Latar banner promo/lembar info (design Figma)
+  static const Color kremPeach = Color(0xFFFCE9D9);
   static const Color abuMuda = Color(0xFFF5F5F5);
   static const Color garisAbu = Color(0xFFEAEAEA);
 
@@ -26,19 +29,5 @@ class TemaWarna {
   static const Color hijauBuka = Color(0xFF2E7D32);
   static const Color merahHabis = Color(0xFFD32F2F);
   static const Color kuningBintang = Color(0xFFFFA000);
-
-  /// Helper pemformat rupiah tanpa pemisah ribuan aneh atau desimal
-  /// Contoh: 18000 -> "Rp 18.000"
-  static String formatRupiah(int nilai) {
-    final teks = nilai.toString();
-    final hasil = StringBuffer();
-    for (var i = 0; i < teks.length; i++) {
-      if (i > 0 && (teks.length - i) % 3 == 0) {
-        hasil.write('.');
-      }
-      hasil.write(teks[i]);
-    }
-    return 'Rp $hasil';
-  }
 }
 

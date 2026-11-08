@@ -29,11 +29,17 @@ class GalatApi implements Exception {
   final JenisGalat jenis;
   final Map<String, List<String>>? errors;
 
+  /// Rincian tambahan dari server untuk galat 409 (PRD Bagian 6.1).
+  /// Misalnya `{"alasan": "toko_tutup", "jam_buka": "08:00", "jam_tutup": "21:00"}`
+  /// atau `{"alasan": "stok_kurang", "item_kurang": [...]}`.
+  final Map<String, dynamic>? data;
+
   const GalatApi({
     required this.pesan,
     required this.jenis,
     this.kodeStatus,
     this.errors,
+    this.data,
   });
 
   /// Galat ketika koneksi internet terputus atau backend tidak menyala
@@ -69,11 +75,22 @@ class GalatApi implements Exception {
   }
 
   /// Galat bentrok status 409 (misal stok habis atau pesanan di luar jam buka)
-  factory GalatApi.bentrok(String pesan) {
+  factory GalatApi.bentrok(String pesan, {Map<String, dynamic>? data}) {
     return GalatApi(
       pesan: pesan,
       jenis: JenisGalat.bentrok,
       kodeStatus: 409,
+      data: data,
+    );
+  }
+
+  /// Galat 401: token statis salah atau kosong (PRD Bagian 6.2).
+  /// Ditampilkan sebagai pesan umum tanpa rincian teknis.
+  factory GalatApi.aksesDitolak() {
+    return const GalatApi(
+      pesan: 'Akses ditolak. Sesi Anda tidak valid, silakan muat ulang halaman.',
+      jenis: JenisGalat.umum,
+      kodeStatus: 401,
     );
   }
 

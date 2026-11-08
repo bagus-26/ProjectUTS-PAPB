@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../model/produk.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 
 /// Widget kartu item produk dalam katalog (Grid/List item)
 /// Sesuai Kriteria 2: Penanda STOK HABIS jelas dan tombol tambah dimatikan
@@ -56,30 +57,7 @@ class KartuProduk extends StatelessWidget {
                           width: double.infinity,
                           height: double.infinity,
                           color: TemaWarna.kremTua,
-                          child: produk.gambar != null && produk.gambar!.isNotEmpty
-                              ? Image.network(
-                                  produk.gambar!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return _placeholderGambar();
-                                  },
-                                  loadingBuilder: (context, child, progress) {
-                                    if (progress == null) return child;
-                                    return const Center(
-                                      child: SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(
-                                            TemaWarna.cokelatUtama,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : _placeholderGambar(),
+                          child: _placeholderGambar(),
                         ),
                       ),
 
@@ -179,33 +157,29 @@ class KartuProduk extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // 2. Rating & Terjual
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      size: 16,
-                      color: TemaWarna.kuningBintang,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${produk.rating}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: siapPesan ? TemaWarna.teksUtama : Colors.grey,
+                // 2. Waktu Persiapan (atribut khas domain, PRD Bagian 3.1)
+                if (produk.waktuPersiapanMenit > 0)
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: siapPesan
+                            ? TemaWarna.teksSekunder
+                            : Colors.grey.shade400,
                       ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '(${produk.terjual})',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: siapPesan ? TemaWarna.teksSekunder : Colors.grey.shade400,
+                      const SizedBox(width: 4),
+                      Text(
+                        '${produk.waktuPersiapanMenit} menit',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: siapPesan
+                              ? TemaWarna.teksSekunder
+                              : Colors.grey.shade400,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
 
                 const SizedBox(height: 4),
 
@@ -223,12 +197,30 @@ class KartuProduk extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
+                // 3b. Deskripsi ringkas (PRD: kolom deskripsi nullable)
+                if (produk.deskripsi != null &&
+                    produk.deskripsi!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    produk.deskripsi!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: siapPesan
+                          ? TemaWarna.teksSekunder
+                          : Colors.grey.shade400,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+
                 // 4. Harga & Tombol Tambah (+)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      TemaWarna.formatRupiah(produk.harga),
+                      formatRupiah(produk.harga),
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,

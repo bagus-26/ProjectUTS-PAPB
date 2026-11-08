@@ -4,6 +4,7 @@ import '../layanan/layanan_api.dart';
 import '../model/produk.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
+import '../umum/format_rupiah.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
@@ -57,48 +58,132 @@ class _HalamanKelolaProdukState extends State<HalamanKelolaProduk> {
     }
   }
 
-  void _tambahProduk() async {
+  Future<void> _tambahProduk() async {
     final hasil = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (context) => const FormProduk()),
     );
     if (hasil == true) _muatData();
   }
 
-  void _ubahProduk(Produk produk) async {
+  Future<void> _ubahProduk(Produk produk) async {
     final hasil = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (context) => FormProduk(produk: produk)),
     );
     if (hasil == true) _muatData();
   }
 
-  void _konfirmasiHapus(Produk produk) {
-    showDialog(
+  /// Dialog konfirmasi, lalu **kirim** `DELETE /api/produk/{id}` ke server.
+  /// 409 (produk masih dipakai pesanan aktif) tampil dari server dan daftar
+  /// tidak diubah; 404 → daftar disegarkan; sukses → item hilang dari daftar.
+  Future<void> _konfirmasiHapus(Produk produk) async {
+    final bool? setuju = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Konfirmasi Hapus'),
-        content: Text('Yakin ingin menghapus menu "${produk.nama}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: TemaWarna.merahHabis),
-            onPressed: () {
-              Navigator.of(context).pop();
-              setState(() {
-                _daftarProduk.removeWhere((p) => p.id == produk.id);
+      builder: (dialogContext) {
+        bool sedangHapus = false;
+        String? galatServer;
+
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> kirimHapus() async {
+              if (sedangHapus) return;
+              setDialogState(() {
+                sedangHapus = true;
+                galatServer = null;
               });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Menu "${produk.nama}" berhasil dihapus.')),
-              );
-            },
-            child: const Text('Hapus'),
-          ),
-        ],
-      ),
+
+              try {
+                await _layanan.hapusProduk(produk.id);
+                if (dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop(true);
+                }
+              } on GalatApi catch (g) {
+                if (!dialogContext.mounted) return;
+                if (g.jenis == JenisGalat.tidakDitemukan) {
+                  // Sudah tidak ada di server — anggap berhasil, segarkan daftar
+                  Navigator.of(dialogContext).pop(true);
+                } else {
+                  // 409 & galat lain: pesan server tampil, item tetap di daftar
+                  setDialogState(() {
+                    sedangHapus = false;
+                    galatServer = g.pesan;
+                  });
+                }
+              } catch (_) {
+                if (!dialogContext.mounted) return;
+                setDialogState(() {
+                  sedangHapus = false;
+                  galatServer = GalatApi.umum().pesan;
+                });
+              }
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text('Konfirmasi Hapus'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Yakin ingin menghapus menu "${produk.nama}"?'),
+                  if (galatServer != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      galatServer!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: TemaWarna.merahHabis,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: sedangHapus
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: TemaWarna.merahHabis,
+                  ),
+                  onPressed: sedangHapus ? null : kirimHapus,
+                  child: sedangHapus
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Hapus'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+
+    if (setuju != true || !mounted) return;
+
+    setState(() {
+      _daftarProduk.removeWhere((p) => p.id == produk.id);
+      if (_daftarProduk.isEmpty) _keadaan = KeadaanMuat.kosong;
+    });
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Menu "${produk.nama}" berhasil dihapus.'),
+        ),
+      );
   }
 
   @override
@@ -132,37 +217,46 @@ class _HalamanKelolaProdukState extends State<HalamanKelolaProduk> {
           saatAksiDitekan: _tambahProduk,
         );
       case KeadaanMuat.berhasil:
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: _daftarProduk.length,
-          itemBuilder: (context, index) {
-            final p = _daftarProduk[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: TemaWarna.garisAbu),
-              ),
-              color: Colors.white,
-              child: ListTile(
-                title: Text(p.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${TemaWarna.formatRupiah(p.harga)} • Stok: ${p.stok}'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                      onPressed: () => _ubahProduk(p),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _konfirmasiHapus(p),
-                    ),
-                  ],
+        return RefreshIndicator(
+          color: TemaWarna.cokelatUtama,
+          onRefresh: _muatData,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: _daftarProduk.length,
+            itemBuilder: (context, index) {
+              final p = _daftarProduk[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: TemaWarna.garisAbu),
                 ),
-              ),
-            );
-          },
+                color: Colors.white,
+                child: ListTile(
+                  title: Text(p.nama,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                      '${formatRupiah(p.harga)} • Stok: ${p.stok}'
+                      '${p.tersedia ? '' : ' • Tidak tersedia'}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined,
+                            color: Colors.blue),
+                        onPressed: () => _ubahProduk(p),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () => _konfirmasiHapus(p),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
         );
     }
   }
