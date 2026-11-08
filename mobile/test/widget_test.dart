@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:projek_makanyuk/halaman/halaman_splash.dart';
 import 'package:projek_makanyuk/model/produk.dart';
 import 'package:projek_makanyuk/widget/chip_kategori.dart';
 import 'package:projek_makanyuk/widget/pemilih_jumlah.dart';
 
 void main() {
+  testWidgets('Splash MakanYuk tampil saat aplikasi dibuka', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: HalamanSplash()),
+    );
+
+    expect(find.text('MakanYuk!'), findsOneWidget);
+    expect(find.text('Menu lezat, tinggal pesan'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   test('Model Produk parse JSON dengan atribut khas Domain 1', () {
     final json = {
       'id': 1,
