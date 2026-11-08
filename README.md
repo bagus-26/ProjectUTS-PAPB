@@ -64,7 +64,24 @@ flutter pub get
 flutter run
 ```
 
-Alamat server berada di `mobile/lib/layanan/layanan_api.dart` (`baseUrlDefault`). Emulator Android menggunakan `http://10.0.2.2:8000/api`; perangkat fisik perlu memakai IP LAN laptop, misalnya `http://192.168.1.10:8000/api`, dan backend dijalankan dengan `php artisan serve --host=0.0.0.0`.
+Untuk langkah lengkap menjalankan frontend di MEmu Player pada Windows, lihat [mobile/PANDUAN-RUN-MEMU.md](mobile/PANDUAN-RUN-MEMU.md). Alamat server diatur di `mobile/lib/konfigurasi/konfigurasi.dart`: emulator Android memakai `http://10.0.2.2:8000/api` secara default. Untuk MEmu atau emulator/perangkat yang memakai alamat host berbeda, jalankan Flutter dengan `--dart-define=API_BASE_URL=http://192.168.1.10:8000/api` (ganti alamat contoh dengan IPv4 laptop backend). Backend harus listen pada semua interface:
+
+```bash
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+Contoh menjalankan aplikasi di Android Emulator:
+
+```bash
+cd mobile
+flutter run
+```
+
+Contoh menjalankan pada emulator/perangkat Android dengan IP LAN laptop:
+
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000/api
+```
 
 PRD mensyaratkan izin `INTERNET` dan `android:usesCleartextTraffic="true"` pada manifest Android utama agar koneksi HTTP lokal dapat digunakan. Pastikan konfigurasi ini ada di `mobile/android/app/src/main/AndroidManifest.xml`.
 
