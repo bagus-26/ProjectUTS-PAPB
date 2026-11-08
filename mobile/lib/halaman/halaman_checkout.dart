@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
+import '../layanan/layanan_lokasi.dart';
 import '../model/isi_keranjang.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
@@ -59,6 +60,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   String? _metodeTerpilih;
 
   bool _sedangKirim = false;
+  bool _sedangAmbilLokasi = false;
   bool _sedangSegarkanRingkasan = false;
 
   /// Pesan galat 422 per kolom (PRD 7.3) untuk ditampilkan di bawah input.
@@ -89,9 +91,24 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     try {
       final kurir = await _layanan.ambilKurir();
       final metode = await _layanan.ambilMetodePembayaran();
+      final riwayat = await _layanan.ambilDaftarPesanan();
       if (!mounted) return;
 
       setState(() {
+        if (riwayat.isNotEmpty) {
+          final pesananTerakhir = riwayat.first;
+          if (_namaController.text.isEmpty) {
+            _namaController.text = pesananTerakhir.namaPenerima;
+          }
+          if (_alamatController.text.isEmpty) {
+            _alamatController.text =
+                LayananLokasi.alamatPengirimanPilihan ??
+                pesananTerakhir.alamatPenerima;
+          }
+        } else if (_alamatController.text.isEmpty) {
+          _alamatController.text =
+              LayananLokasi.alamatPengirimanPilihan ?? '';
+        }
         _daftarKurir = kurir.where((item) => item.aktif).toList();
         _daftarMetode = metode.where((item) => item.aktif).toList();
         if (_kurirTerpilihId == null && _daftarKurir.isNotEmpty) {
@@ -149,6 +166,27 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     _segarkanRingkasan();
   }
 
+  Future<void> _ambilLokasi() async {
+    if (_sedangAmbilLokasi) return;
+    setState(() => _sedangAmbilLokasi = true);
+
+    try {
+      final alamat = await const LayananLokasi().ambilKoordinatSaatIni();
+      if (!mounted) return;
+      setState(() {
+        _alamatController.text = alamat;
+        LayananLokasi.alamatPengirimanPilihan = alamat;
+      });
+      _bersihkanGalatKolom();
+    } on LayananLokasiException catch (galat) {
+      _tampilkanGalat(GalatApi.umum(galat.pesan));
+    } catch (_) {
+      _tampilkanGalat(GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+    } finally {
+      if (mounted) setState(() => _sedangAmbilLokasi = false);
+    }
+  }
+
   /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
   Future<void> _buatPesanan() async {
     if (_sedangKirim) return;
@@ -176,6 +214,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
       );
 
       if (!mounted) return;
+      LayananLokasi.alamatPengirimanPilihan =
+          _alamatController.text.trim();
 
       // 201 → Rincian Pesanan dengan tumpukan dibersihkan (PRD 7.1)
       Navigator.of(context).pushReplacement(
@@ -440,6 +480,25 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               return null;
             },
             onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed:
+                _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
+            icon: _sedangAmbilLokasi
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location_rounded),
+            label: Text(
+              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Gunakan lokasi saya',
+            ),
+          ),
+          const Text(
+            'Koordinat perlu dilengkapi dengan nama jalan dan patokan alamat.',
+            style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
       ),

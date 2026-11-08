@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'halaman/halaman_utama.dart';
+import 'halaman/halaman_splash.dart';
 import 'umum/tema_warna.dart';
 
 void main() {
@@ -29,7 +29,7 @@ class AplikasiMakanYuk extends StatelessWidget {
         ),
         snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
       ),
-      home: const HalamanUtama(),
+      home: const HalamanSplash(),
     );
   }
 }

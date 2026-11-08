@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Konfigurasi aplikasi MakanYuk! (Kelompok 1)
 ///
 /// Berkas ini menjadi satu-satunya tempat alamat server diatur,
@@ -5,12 +7,22 @@
 class Konfigurasi {
   Konfigurasi._();
 
-  /// Alamat server pengembangan.
+  static const String _baseUrlOverride = String.fromEnvironment('API_BASE_URL');
+
+  /// Alamat server pengembangan. Bisa dioverride dengan `--dart-define`.
   ///
-  /// * Emulator Android: `http://10.0.2.2:8000/api` (menuju `localhost` di mesin host)
-  /// * Perangkat fisik: ganti dengan IP LAN laptop, lalu jalankan
-  ///   `php artisan serve --host=0.0.0.0`
-  static const String baseUrl = 'http://10.0.2.2:8000/api';
+  /// Android Emulator menggunakan alamat khusus untuk mengakses komputer host.
+  /// Untuk perangkat fisik atau emulator lain, gunakan `API_BASE_URL`.
+  static String get baseUrl {
+    if (_baseUrlOverride.isNotEmpty) {
+      return _baseUrlOverride;
+    }
+
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'http://10.0.2.2:8000/api',
+      _ => 'http://localhost:8000/api',
+    };
+  }
 
   /// Batas waktu setiap permintaan: 10 detik (PRD Bagian 4.3 butir 7).
   /// Bila lewat, pengguna memperoleh galat `GalatBatasWaktu` + tombol coba lagi.

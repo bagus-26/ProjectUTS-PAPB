@@ -5,7 +5,7 @@ import 'halaman_katalog.dart';
 import 'halaman_menu_favorit.dart';
 import 'halaman_keranjang.dart';
 import 'halaman_riwayat_pesanan.dart';
-import 'halaman_profil.dart';
+import 'halaman_akun.dart';
 
 class HalamanUtama extends StatefulWidget {
   const HalamanUtama({super.key});
@@ -46,7 +46,7 @@ class _HalamanUtamaState extends State<HalamanUtama> {
         saatPilihMenu: () => _pindahKeTab(0),
       ),
       const HalamanMenuFavorit(),
-      const HalamanProfil(),
+      HalamanAkun(saatBukaRiwayat: () => _pindahKeTab(1)),
     ];
 
     return Scaffold(

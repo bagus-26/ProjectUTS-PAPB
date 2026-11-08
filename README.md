@@ -11,7 +11,7 @@ Dokumen acuan utama: [`docs/PRD.md`](docs/PRD.md). Kontrak API v1 diringkas di [
 | PM | Bagus Artandyo Witjaksono | 24102029 | Project Manager (Ketua Kelompok), fondasi backend & Flutter, integrasi, README |
 | A1 | Adhiyatma Pandu Hermansyah | 24102002 | Backend: basis data, seeder, Produk |
 | A2 | Nurul Maghfiroh | 24102051 | Backend: Keranjang, Checkout, transaksi |
-| A3 | Alifia Az-Zahrah Murtidewi | 24102004 | Backend: Pesanan, Kurir, status, dokumentasi API; UI/UX Flutter |
+| A3 | Alifia Az-Zahrah Murtidewi | 24102004 | UI/UX Flutter |
 | A4 | Erika Salsabila Intania | 24102009 | Flutter: Katalog, Rincian Produk, Kelola Produk, Riwayat |
 | A5 | Mir'atus Sani Fadillah | 24102047 | Flutter: Keranjang, Checkout, Rincian Pesanan, Widget |
 
@@ -64,9 +64,21 @@ flutter pub get
 flutter run
 ```
 
-Alamat server berada di `mobile/lib/layanan/layanan_api.dart` (`baseUrlDefault`). Emulator Android menggunakan `http://10.0.2.2:8000/api`; perangkat fisik perlu memakai IP LAN laptop, misalnya `http://192.168.1.10:8000/api`, dan backend dijalankan dengan `php artisan serve --host=0.0.0.0`.
+Untuk langkah lengkap menjalankan frontend di MEmu Player pada Windows, lihat [mobile/PANDUAN-RUN-MEMU.md](mobile/PANDUAN-RUN-MEMU.md). Alamat server diatur di `mobile/lib/konfigurasi/konfigurasi.dart`: emulator Android memakai `http://10.0.2.2:8000/api` secara default. Untuk MEmu atau emulator/perangkat yang memakai alamat host berbeda, jalankan Flutter dengan `--dart-define=API_BASE_URL=http://192.168.1.10:8000/api` (ganti alamat contoh dengan IPv4 laptop backend). Backend harus listen pada semua interface:
+
+```bash
+php artisan serve --host=0.0.0.0 --port=8000
+```
+
+Untuk MuMu Player, sambungkan perangkat lewat ADB, jalankan `adb reverse tcp:8000 tcp:8000`, lalu gunakan alamat loopback saat menjalankan Flutter:
+
+```bash
+flutter run -d <id-perangkat> --dart-define=API_BASE_URL=http://127.0.0.1:8000/api
+```
 
 PRD mensyaratkan izin `INTERNET` dan `android:usesCleartextTraffic="true"` pada manifest Android utama agar koneksi HTTP lokal dapat digunakan. Pastikan konfigurasi ini ada di `mobile/android/app/src/main/AndroidManifest.xml`.
+
+Fitur alamat meminta lokasi hanya setelah pengguna menekan tombol lokasi. Aplikasi menggunakan koordinat perangkat untuk membantu mengisi alamat; lengkapi nama jalan dan patokan secara manual. Lokasi tidak dikirim ke layanan geocoding pihak ketiga. Profil tetap memakai pelanggan demo dan data alamat pesanan yang sudah ada—tidak menambah endpoint atau skema akun di luar PRD.
 
 ## 5. Token Statis
 
@@ -81,7 +93,7 @@ Token salah atau kosong dibalas `401` dengan pembungkus yang sama.
 
 ## 6. Daftar Endpoint
 
-Daftar berikut adalah kontrak yang direncanakan dalam PRD Bagian 6, bukan pernyataan bahwa endpoint sudah berfungsi. Saat ini controller masih berupa stub. Pembungkus respons: `status`, `code` (string), `message`, `data`, dan `errors` (khusus 422).
+Daftar berikut adalah kontrak dalam PRD Bagian 6; endpoint yang terdaftar sudah diimplementasikan. Pembungkus respons: `status`, `code` (string), `message`, `data`, dan `errors` (khusus 422).
 
 | Metode | Jalur | Fungsi | PIC |
 |---|---|---|---|
@@ -157,7 +169,7 @@ Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak 
 
 ## 11. Status Implementasi Saat Ini
 
-- Backend sudah memiliki pembungkus respons, middleware, handler exception, dan 16 route; controller endpoint masih stub yang membalas 501. Migrasi dan seeder domain (produk, varian, keranjang, pesanan, detail pesanan, kurir, metode pembayaran, toko, pelanggan) sudah tersedia.
-- Flutter memiliki layanan HTTP, batas waktu, exception bertipe, enum keadaan layar, model, widget, dan beberapa halaman. Integrasi endpoint belum lengkap; `mobile/lib/main.dart` masih menampilkan aplikasi counter Flutter bawaan.
+- Backend sudah memiliki pembungkus respons, middleware, handler exception, seluruh endpoint kontrak Bagian 6, serta migrasi dan seeder domain.
+- Flutter mengimplementasikan alur katalog, produk, keranjang, checkout, riwayat/status pesanan, profil demo, pemilihan koordinat lokasi secara manual, dan splash screen.
 - PRD mensyaratkan 7 halaman Flutter, migration dan seeder domain, serta endpoint berfungsi. Semua itu masih menjadi pekerjaan implementasi; status terkini dapat berubah seiring pengerjaan.
 - PDF dokumentasi API, Postman, dan ERD ditunda sementara. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.
