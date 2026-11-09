@@ -95,6 +95,24 @@ class ProdukApiTest extends TestCase
         $this->assertDatabaseMissing('keranjang', ['produk_id' => $id]);
     }
 
+    public function test_produk_menolak_kategori_di_luar_pilihan_aplikasi(): void
+    {
+        $this->withToken('kelompok1-token-statis')
+            ->postJson('/api/produk', [
+                'nama' => 'Menu Kategori Tidak Valid',
+                'harga' => 12000,
+                'kategori' => 'Dessert',
+                'stok' => 8,
+                'tersedia' => true,
+                'bisa_pedas' => false,
+                'waktu_persiapan_menit' => 10,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('kategori');
+
+        $this->assertDatabaseMissing('produk', ['nama' => 'Menu Kategori Tidak Valid']);
+    }
+
     public function test_produk_pada_pesanan_aktif_tidak_dapat_dihapus(): void
     {
         $this->seed([
