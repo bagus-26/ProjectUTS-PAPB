@@ -64,6 +64,26 @@ class FiturApiTest extends TestCase
             ->assertOk();
     }
 
+    public function test_penambahan_keranjang_menolak_jumlah_baris_di_atas_batas_database(): void
+    {
+        Produk::query()->whereKey(1)->update(['stok' => 100000]);
+        $api = $this->withToken('kelompok1-token-statis');
+
+        $api->postJson('/api/keranjang', ['produk_id' => 1, 'jumlah' => 50000])
+            ->assertCreated();
+
+        $api->postJson('/api/keranjang', ['produk_id' => 1, 'jumlah' => 20000])
+            ->assertStatus(409)
+            ->assertJsonPath('data.alasan', 'batas_jumlah_item')
+            ->assertJsonPath('data.maksimum', 65535);
+
+        $this->assertDatabaseHas('keranjang', [
+            'pelanggan_id' => 1,
+            'produk_id' => 1,
+            'jumlah' => 50000,
+        ]);
+    }
+
     public function test_pelanggan_hanya_melihat_pesanan_miliknya_dan_detailnya(): void
     {
         $item = $this->withToken('kelompok1-token-statis')

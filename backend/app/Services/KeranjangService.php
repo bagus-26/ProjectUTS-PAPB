@@ -87,6 +87,15 @@ class KeranjangService
             ->where('catatan', $catatan)
             ->first();
 
+        $jumlahBaru = ($item?->jumlah ?? 0) + (int) $data['jumlah'];
+
+        if ($jumlahBaru > 65535) {
+            throw new ApiException('Jumlah item pada satu baris keranjang melebihi batas.', 409, [
+                'alasan' => 'batas_jumlah_item',
+                'maksimum' => 65535,
+            ]);
+        }
+
         if ($item === null) {
             $item = Keranjang::query()->create([
                 'pelanggan_id' => $pelangganId,
@@ -97,9 +106,7 @@ class KeranjangService
                 'catatan' => $catatan,
             ]);
         } else {
-            $item->update([
-                'jumlah' => $item->jumlah + (int) $data['jumlah'],
-            ]);
+            $item->update(['jumlah' => $jumlahBaru]);
         }
 
         $item->load(['produk', 'varian']);
