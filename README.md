@@ -114,7 +114,19 @@ Daftar berikut adalah kontrak dalam PRD Bagian 6; endpoint yang terdaftar sudah 
 | GET | `/api/kategori` | Daftar kategori untuk filter | A1 |
 | GET | `/api/metode-pembayaran` | Daftar metode pembayaran simulasi | A3 |
 
-PDF dokumentasi API dan ekspor Postman direncanakan sesuai PRD, tetapi ditunda sementara sesuai prioritas pengerjaan saat ini.
+Dokumentasi endpoint API dalam format PDF tersedia di [`docs/PAPB-UTS_Kelompok-01_Makanan.pdf`](docs/PAPB-UTS_Kelompok-01_Makanan.pdf) (10 halaman: ERD, tabel endpoint, contoh request/response nyata, perhitungan, aturan bisnis, idempotensi, dan transisi status). Ekspor Postman belum dibuat.
+
+### Panel Admin
+
+Panel admin berbasis sesi tersedia di `http://127.0.0.1:8000/admin` (akun seed: `admin@makanyuk.test` / `admin12345`). Panel ini melengkapi backend tanpa mengubah kode Flutter dan memakai `StatusPesanan`, `PesananService`, `AturanProduk`, serta `ProdukService` yang sama dengan API, sehingga transisi status dan validasi produk konsisten.
+
+- Login/logout admin dengan middleware `PastikanAdmin`; pengguna non-admin tidak dapat membuka `/admin`.
+- Dasbor ringkas, daftar dan rincian pesanan, aksi ACC pembayaran, penolakan, pemrosesan, pengiriman, dan penyelesaian pesanan.
+- Pembatalan pesanan mengembalikan stok produk secara otomatis.
+- CRUD produk (soft delete) dan pengaturan jam buka/tutup toko termasuk tutup manual sementara.
+- Halaman referensi berisi daftar status, transisi sah, dan aturan domain.
+
+Akses panel memerlukan `php artisan migrate --seed` agar `users.is_admin`, `toko.tutup_manual`, dan akun admin tersedia. Perilaku panel dicakup oleh `backend/tests/Feature/AdminPanelTest.php` (bagian dari `php artisan test`).
 
 ## 7. Simulasi Galat dan Jam Buka saat Demo
 
@@ -144,7 +156,7 @@ Lembar persiapan demo langsung (tanpa video): [`docs/lembar-demo-langsung.md`](d
 |   |-- lib/
 |   |-- test/
 |   `-- pubspec.yaml
-|-- docs/                    # PRD, kontrak API, catatan Flutter, lembar demo
+|-- docs/                    # PRD, kontrak API, catatan Flutter, lembar demo, PDF dokumentasi API
 |-- README.md
 ```
 
@@ -172,4 +184,4 @@ Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak 
 - Backend sudah memiliki pembungkus respons, middleware, handler exception, seluruh endpoint kontrak Bagian 6, serta migrasi dan seeder domain.
 - Flutter mengimplementasikan alur katalog, produk, keranjang, checkout, riwayat/status pesanan, profil demo, pemilihan koordinat lokasi secara manual, dan splash screen.
 - PRD mensyaratkan 7 halaman Flutter, migration dan seeder domain, serta endpoint berfungsi. Semua itu masih menjadi pekerjaan implementasi; status terkini dapat berubah seiring pengerjaan.
-- PDF dokumentasi API, Postman, dan ERD ditunda sementara. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.
+- PDF dokumentasi API tersedia di `docs/` dan panel admin tersedia di `/admin`. Ekspor Postman belum dibuat. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.
