@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Pesanan;
+use App\Support\StatusPesanan;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +23,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer('admin.layouts.app', function ($view): void {
+            if (! Auth::check()) {
+                return;
+            }
+
+            $view->with(
+                'jumlahPerluKonfirmasi',
+                Pesanan::query()->where('status', StatusPesanan::MENUNGGU_KONFIRMASI)->count(),
+            );
+        });
     }
 }

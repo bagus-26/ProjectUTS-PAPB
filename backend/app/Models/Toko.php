@@ -8,5 +8,15 @@ class Toko extends Model
 {
     protected $table = 'toko';
 
-    protected $fillable = ['nama', 'jam_buka', 'jam_tutup'];
+    protected $fillable = ['nama', 'jam_buka', 'jam_tutup', 'tutup_manual'];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'tutup_manual' => 'boolean',
+        ];
+    }
 }
