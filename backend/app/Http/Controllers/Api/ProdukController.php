@@ -3,30 +3,25 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Pesanan;
 use App\Models\Produk;
 use App\Models\VarianProduk;
+use App\Services\ProdukService;
+use App\Support\AturanProduk;
 use App\Support\ResponsApi;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProdukController extends Controller
 {
+    public function __construct(
+        private readonly ProdukService $produkService,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = Produk::query()->with([
-            'varian' => fn ($query) => $query->where('aktif', true)->orderBy('id'),
-        ]);
-
-        if ($kategori = $request->query('kategori')) {
-            $query->where('kategori', $kategori);
-        }
-
-        if ($cari = $request->query('cari')) {
-            $query->where('nama', 'like', '%'.$cari.'%');
-        }
-
-        $produk = $query->orderBy('id')->get()
+        $produk = $this->produkService
+            ->queryDaftar($request->query('kategori'), $request->query('cari'))
+            ->get()
             ->map(fn (Produk $item): array => $this->representasi($item));
 
         return ResponsApi::sukses($produk, 'Daftar produk berhasil diambil');
@@ -47,9 +42,8 @@ class ProdukController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate($this->aturanProduk());
-        $produk = Produk::query()->create($data);
-        $produk->load(['varian' => fn ($query) => $query->where('aktif', true)->orderBy('id')]);
+        $data = $request->validate(AturanProduk::rules());
+        $produk = $this->produkService->buat($data);
 
         return ResponsApi::sukses($this->representasi($produk), 'Produk berhasil ditambahkan', 201);
     }
@@ -62,8 +56,7 @@ class ProdukController extends Controller
             return ResponsApi::gagal('Produk tidak ditemukan.', 404);
         }
 
-        $produk->update($request->validate($this->aturanProduk()));
-        $produk->load(['varian' => fn ($query) => $query->where('aktif', true)->orderBy('id')]);
+        $produk = $this->produkService->ubah($produk, $request->validate(AturanProduk::rules()));
 
         return ResponsApi::sukses($this->representasi($produk), 'Produk berhasil diperbarui');
     }
@@ -76,38 +69,9 @@ class ProdukController extends Controller
             return ResponsApi::gagal('Produk tidak ditemukan.', 404);
         }
 
-        $pesananAktif = Pesanan::query()
-            ->whereIn('status', ['menunggu_pembayaran', 'menunggu_konfirmasi', 'dibayar', 'diproses', 'dikirim'])
-            ->whereHas('detail', fn ($query) => $query->where('produk_id', $produk->id))
-            ->exists();
-
-        if ($pesananAktif) {
-            return ResponsApi::gagal('Produk masih digunakan dalam pesanan aktif.', 409, [
-                'alasan' => 'produk_dipakai_pesanan_aktif',
-                'produk_id' => $produk->id,
-            ]);
-        }
-
-        $produk->delete();
+        $this->produkService->hapus($produk);
 
         return ResponsApi::sukses(['id' => $produk->id], 'Produk berhasil dihapus');
-    }
-
-    /**
-     * @return array<string, array<int, mixed>>
-     */
-    private function aturanProduk(): array
-    {
-        return [
-            'nama' => ['required', 'string', 'max:150'],
-            'harga' => ['required', 'integer', 'min:1', 'max:4294967295'],
-            'kategori' => ['required', 'string', 'max:50'],
-            'stok' => ['required', 'integer', 'min:0', 'max:4294967295'],
-            'tersedia' => ['required', 'boolean'],
-            'deskripsi' => ['nullable', 'string'],
-            'bisa_pedas' => ['required', 'boolean'],
-            'waktu_persiapan_menit' => ['required', 'integer', 'min:0', 'max:65535'],
-        ];
     }
 
     /**

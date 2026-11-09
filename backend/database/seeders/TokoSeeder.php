@@ -14,7 +14,7 @@ class TokoSeeder extends Seeder
     {
         Toko::query()->updateOrCreate(
             ['nama' => 'Warung Kelompok 1'],
-            ['jam_buka' => '08:00', 'jam_tutup' => '21:00'],
+            ['jam_buka' => '08:00', 'jam_tutup' => '21:00', 'tutup_manual' => false],
         );
     }
 }

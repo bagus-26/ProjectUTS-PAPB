@@ -26,7 +26,7 @@ class JamOperasiToko
     }
 
     /**
-     * @return array{buka: bool, jam_buka: string, jam_tutup: string, pesan: string}
+     * @return array{buka: bool, tutup_manual: bool, jam_buka: string, jam_tutup: string, pesan: string}
      */
     public function status(?CarbonInterface $waktu = null): array
     {
@@ -35,21 +35,27 @@ class JamOperasiToko
         $jamBuka = $this->normalisasiJam($toko->jam_buka);
         $jamTutup = $this->normalisasiJam($toko->jam_tutup);
         $jamSekarang = $sekarang->format('H:i:s');
+        $tutupManual = (bool) $toko->tutup_manual;
 
         // Mendukung jam tutup yang melewati tengah malam, mis. 18:00–02:00.
-        $buka = $jamTutup >= $jamBuka
+        $sesuaiJadwal = $jamTutup >= $jamBuka
             ? ($jamSekarang >= $jamBuka && $jamSekarang < $jamTutup)
             : ($jamSekarang >= $jamBuka || $jamSekarang < $jamTutup);
 
+        $buka = ! $tutupManual && $sesuaiJadwal;
+
         return [
             'buka' => $buka,
+            'tutup_manual' => $tutupManual,
             'jam_buka' => substr($jamBuka, 0, 5),
             'jam_tutup' => substr($jamTutup, 0, 5),
-            'pesan' => sprintf(
-                'Toko sedang tutup. Pesanan hanya dapat dibuat pukul %s–%s WIB.',
-                $this->formatJam($jamBuka),
-                $this->formatJam($jamTutup),
-            ),
+            'pesan' => $tutupManual
+                ? 'Toko sedang ditutup sementara oleh admin. Silakan coba beberapa saat lagi.'
+                : sprintf(
+                    'Toko sedang tutup. Pesanan hanya dapat dibuat pukul %s–%s WIB.',
+                    $this->formatJam($jamBuka),
+                    $this->formatJam($jamTutup),
+                ),
         ];
     }
 

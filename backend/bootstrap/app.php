@@ -2,6 +2,7 @@
 
 use App\Exceptions\ApiException;
 use App\Http\Middleware\ForceJson;
+use App\Http\Middleware\PastikanAdmin;
 use App\Http\Middleware\PelangganStatis;
 use App\Http\Middleware\SimulasiGangguan;
 use App\Support\ResponsApi;
@@ -24,7 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo('/admin/login');
+
         $middleware->alias([
+            'admin' => PastikanAdmin::class,
             'force.json' => ForceJson::class,
             'pelanggan.statis' => PelangganStatis::class,
             'simulasi.gangguan' => SimulasiGangguan::class,

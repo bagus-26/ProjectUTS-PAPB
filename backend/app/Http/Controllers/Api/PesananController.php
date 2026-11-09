@@ -2,29 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\DetailPesanan;
 use App\Models\Pesanan;
-use App\Models\Produk;
+use App\Services\PesananService;
 use App\Support\ResponsApi;
+use App\Support\StatusPesanan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PesananController extends Controller
 {
-    private const TRANSISI = [
-        'menunggu_pembayaran' => ['menunggu_konfirmasi', 'dibatalkan'],
-        'menunggu_konfirmasi' => ['dibayar', 'dibatalkan'],
-        'dibayar' => ['diproses'],
-        'diproses' => ['dikirim'],
-        'dikirim' => ['selesai'],
-        'selesai' => [],
-        'dibatalkan' => [],
-    ];
-
     public function index(Request $request): JsonResponse
     {
         $pesanan = Pesanan::query()
@@ -53,53 +42,17 @@ class PesananController extends Controller
         return ResponsApi::sukses($this->representasi($pesanan, true), 'Rincian pesanan berhasil diambil');
     }
 
-    public function ubahStatus(Request $request, string $id): JsonResponse
+    public function ubahStatus(Request $request, string $id, PesananService $pesananService): JsonResponse
     {
         $data = $request->validate([
-            'status' => ['required', 'string', Rule::in(array_keys(self::TRANSISI))],
+            'status' => ['required', 'string', Rule::in(StatusPesanan::semua())],
         ]);
 
-        $pesanan = DB::transaction(function () use ($request, $id, $data): Pesanan {
-            $pesanan = Pesanan::query()
-                ->where('pelanggan_id', $this->pelangganId($request))
-                ->whereKey($id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($pesanan === null) {
-                throw new ApiException('Pesanan tidak ditemukan.', 404);
-            }
-
-            if (! in_array($data['status'], self::TRANSISI[$pesanan->status] ?? [], true)) {
-                throw new ApiException('Perubahan status pesanan tidak diizinkan.', 409, [
-                    'status_sekarang' => $pesanan->status,
-                    'status_diminta' => $data['status'],
-                ]);
-            }
-
-            if ($data['status'] === 'dibatalkan') {
-                $detail = DetailPesanan::query()
-                    ->where('pesanan_id', $pesanan->id)
-                    ->orderBy('produk_id')
-                    ->lockForUpdate()
-                    ->get();
-
-                foreach ($detail->groupBy('produk_id') as $produkId => $items) {
-                    $produk = Produk::query()
-                        ->whereKey($produkId)
-                        ->lockForUpdate()
-                        ->first();
-
-                    if ($produk !== null) {
-                        $produk->increment('stok', (int) $items->sum('jumlah'));
-                    }
-                }
-            }
-
-            $pesanan->update(['status' => $data['status']]);
-
-            return $pesanan->load(['kurir', 'metodePembayaran', 'detail']);
-        });
+        $pesanan = $pesananService->ubahStatus(
+            (int) $id,
+            $data['status'],
+            $this->pelangganId($request),
+        );
 
         return ResponsApi::sukses($this->representasi($pesanan, true), 'Status pesanan berhasil diperbarui');
     }
