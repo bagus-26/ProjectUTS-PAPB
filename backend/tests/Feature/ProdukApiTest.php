@@ -85,10 +85,14 @@ class ProdukApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.nama', 'Menu Diperbarui');
 
+        $api->postJson('/api/keranjang', ['produk_id' => $id, 'jumlah' => 1])
+            ->assertCreated();
+
         $api->deleteJson('/api/produk/'.$id)
             ->assertOk();
 
         $this->assertSoftDeleted('produk', ['id' => $id]);
+        $this->assertDatabaseMissing('keranjang', ['produk_id' => $id]);
     }
 
     public function test_produk_pada_pesanan_aktif_tidak_dapat_dihapus(): void
