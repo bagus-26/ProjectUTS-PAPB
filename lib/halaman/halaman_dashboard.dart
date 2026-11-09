@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'halaman_katalog.dart';
 
-/// Halaman Dashboard utama toko (Kelompok 1)
+/// Halaman utama aplikasi MakanYuk yang menampilkan katalog produk.(Kelompok 1)
 class HalamanDashboard extends StatelessWidget {
   const HalamanDashboard({super.key});
 
