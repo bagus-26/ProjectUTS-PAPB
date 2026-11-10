@@ -5,7 +5,7 @@ class LayananLokasi {
 
   static String? alamatPengirimanPilihan;
 
-  Future<String> ambilKoordinatSaatIni() async {
+  Future<Position> ambilPosisiSaatIni() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw const LayananLokasiException(
         'Aktifkan layanan lokasi perangkat lalu coba lagi.',
@@ -29,13 +29,16 @@ class LayananLokasi {
       );
     }
 
-    final posisi = await Geolocator.getCurrentPosition(
+    return Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         timeLimit: Duration(seconds: 20),
       ),
     );
+  }
 
+  Future<String> ambilKoordinatSaatIni() async {
+    final posisi = await ambilPosisiSaatIni();
     return 'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, '
         '${posisi.longitude.toStringAsFixed(6)}';
   }
