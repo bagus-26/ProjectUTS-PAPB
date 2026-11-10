@@ -180,7 +180,7 @@ class _HalamanSplashState extends State<HalamanSplash>
     final size = media.size;
 
     return Scaffold(
-      backgroundColor: TemaWarna.cream, // #FFF4E5
+      backgroundColor: const Color.fromARGB(255, 255, 244, 227), // #FFF4E3
       body: Stack(
         fit: StackFit.expand,
         children: [
