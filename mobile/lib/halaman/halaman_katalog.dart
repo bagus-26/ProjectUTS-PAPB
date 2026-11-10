@@ -461,29 +461,32 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
         // Kriteria 2 Butir 1: Dibangun dengan GridView.builder
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.68,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final produk = _daftarProduk[index];
-                return KartuProduk(
-                  produk: produk,
-                  isFavorit: FavoritLokal.berisi(produk.id),
-                  onTap: () => _bukaRincian(produk),
-                  onTambah: () => _tambahLangsung(produk),
-                  onFavorit: () {
-                    setState(() {
-                      FavoritLokal.alihkan(produk.toJson());
-                    });
-                  },
-                );
-              },
-              childCount: _daftarProduk.length,
+          sliver: ValueListenableBuilder<int>(
+            valueListenable: FavoritLokal.versi,
+            builder: (context, _, _) => SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 14,
+                crossAxisSpacing: 14,
+                childAspectRatio: 0.68,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final produk = _daftarProduk[index];
+                  return KartuProduk(
+                    produk: produk,
+                    isFavorit: FavoritLokal.berisi(produk.id),
+                    onTap: () => _bukaRincian(produk),
+                    onTambah: () => _tambahLangsung(produk),
+                    onFavorit: () {
+                      setState(() {
+                        FavoritLokal.alihkan(produk.toJson());
+                      });
+                    },
+                  );
+                },
+                childCount: _daftarProduk.length,
+              ),
             ),
           ),
         );
