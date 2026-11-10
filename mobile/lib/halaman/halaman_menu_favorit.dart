@@ -76,6 +76,10 @@ class FavoritLokal {
   static final Map<int, Map<String, dynamic>> _tersimpan =
       <int, Map<String, dynamic>>{};
 
+  static final ValueNotifier<int> _versi = ValueNotifier<int>(0);
+
+  static ValueNotifier<int> get versi => _versi;
+
   static List<Map<String, dynamic>> get semua =>
       _tersimpan.values.toList(growable: false);
 
@@ -93,10 +97,12 @@ class FavoritLokal {
     } else {
       _tersimpan[id] = Map<String, dynamic>.from(produk);
     }
+    _versi.value++;
   }
 
   static void hapus(int id) {
     _tersimpan.remove(id);
+    _versi.value++;
   }
 }
 
@@ -140,45 +146,50 @@ class _HalamanMenuFavoritState extends State<HalamanMenuFavorit> {
 
   @override
   Widget build(BuildContext context) {
-    final favorit = FavoritLokal.semua;
+    return ValueListenableBuilder<int>(
+      valueListenable: FavoritLokal.versi,
+      builder: (context, _, _) {
+        final favorit = FavoritLokal.semua;
 
-    return Scaffold(
-      backgroundColor: _warnaKrem,
-      appBar: AppBar(
-        title: const Text('Menu Favorit'),
-        backgroundColor: _warnaKrem,
-        foregroundColor: _warnaCokelat,
-        surfaceTintColor: Colors.transparent,
-      ),
-      body: favorit.isEmpty
-          ? _tampilanKosong()
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-              itemCount: favorit.length,
-              itemBuilder: (BuildContext context, int indeks) {
-                final produk = favorit[indeks];
+        return Scaffold(
+          backgroundColor: _warnaKrem,
+          appBar: AppBar(
+            title: const Text('Menu Favorit'),
+            backgroundColor: _warnaKrem,
+            foregroundColor: _warnaCokelat,
+            surfaceTintColor: Colors.transparent,
+          ),
+          body: favorit.isEmpty
+              ? _tampilanKosong()
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                  itemCount: favorit.length,
+                  itemBuilder: (BuildContext context, int indeks) {
+                    final produk = favorit[indeks];
 
-                return _KartuFavorit(
-                  produk: produk,
-                  saatDihapus: () {
-                    final id = _idProduk(produk);
+                    return _KartuFavorit(
+                      produk: produk,
+                      saatDihapus: () {
+                        final id = _idProduk(produk);
 
-                    if (id != null) {
-                      _hapusFavorit(id);
-                    }
+                        if (id != null) {
+                          _hapusFavorit(id);
+                        }
+                      },
+                    );
                   },
-                );
-              },
-            ),
-      floatingActionButton: favorit.isEmpty
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _bukaPemilih,
-              backgroundColor: _warnaCokelat,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Favorit'),
-            ),
+                ),
+          floatingActionButton: favorit.isEmpty
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: _bukaPemilih,
+                  backgroundColor: _warnaCokelat,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Tambah Favorit'),
+                ),
+        );
+      },
     );
   }
 

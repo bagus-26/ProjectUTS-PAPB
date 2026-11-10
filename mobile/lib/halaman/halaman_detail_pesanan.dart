@@ -12,6 +12,7 @@ import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
+import '../widget/gambar_menu.dart';
 import 'halaman_riwayat_pesanan.dart';
 import 'halaman_utama.dart';
 
@@ -444,8 +445,20 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: GambarMenu(
+                            nama: item.namaProduk,
+                            kategori: 'Makanan',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
