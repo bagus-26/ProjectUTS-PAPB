@@ -53,17 +53,23 @@ class _HalamanSplashState extends State<HalamanSplash>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
+              Image.asset(
+                'assets/images/splash.png',
                 width: 104,
                 height: 104,
-                decoration: const BoxDecoration(
-                  color: TemaWarna.cokelatUtama,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.restaurant_rounded,
-                  size: 56,
-                  color: Colors.white,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 104,
+                  height: 104,
+                  decoration: const BoxDecoration(
+                    color: TemaWarna.cokelatUtama,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.restaurant_rounded,
+                    size: 56,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),

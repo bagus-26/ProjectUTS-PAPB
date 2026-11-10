@@ -64,6 +64,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 
   bool _sedangKirim = false;
   bool _sedangAmbilLokasi = false;
+  final MapController _mapController = MapController();
+  final ValueNotifier<String> _statusLokasi = ValueNotifier<String>('Mengambil lokasi...');
   bool _sedangSegarkanRingkasan = false;
 
   /// Pesan galat 422 per kolom (PRD 7.3) untuk ditampilkan di bawah input.
@@ -172,6 +174,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   Future<void> _ambilLokasi() async {
     if (_sedangAmbilLokasi) return;
     setState(() => _sedangAmbilLokasi = true);
+    _statusLokasi.value = 'Mengambil lokasi...';
 
     final sheetController = showDialog<void>(
       context: context,
@@ -181,20 +184,27 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         child: SizedBox(
           width: 340,
           height: 420,
-          child: _PetaLokasiSheet(),
+          child: _PetaLokasiSheet(controller: _mapController, status: _statusLokasi),
         ),
       ),
     );
 
     try {
-      final alamat = await const LayananLokasi().ambilKoordinatSaatIni();
-      if (!mounted) return;
-      setState(() {
-        _alamatController.text = alamat;
-        LayananLokasi.alamatPengirimanPilihan = alamat;
-      });
-      _bersihkanGalatKolom();
-      if (mounted) Navigator.of(context).pop();
+      final layanan = const LayananLokasi();
+    final posisi = await layanan.ambilPosisiSaatIni();
+    if (!mounted) return;
+    _mapController.move(LatLng(posisi.latitude, posisi.longitude), 15);
+    await Future.delayed(const Duration(seconds: 1));
+    final alamat =
+        'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, ${posisi.longitude.toStringAsFixed(6)}';
+    if (!mounted) return;
+    setState(() {
+      _alamatController.text = alamat;
+      LayananLokasi.alamatPengirimanPilihan = alamat;
+    });
+    _statusLokasi.value = alamat;
+    _bersihkanGalatKolom();
+    // Tidak menutup otomatis; pengguna menutup manual via tombol X.
     } on LayananLokasiException catch (galat) {
       if (mounted) {
         Navigator.of(context).pop();
@@ -864,6 +874,10 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 }
 
 class _PetaLokasiSheet extends StatelessWidget {
+  final MapController controller;
+  final ValueNotifier<String> status;
+  const _PetaLokasiSheet({required this.controller, required this.status});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -880,10 +894,13 @@ class _PetaLokasiSheet extends StatelessWidget {
               children: [
                 const Icon(Icons.location_on, color: Colors.brown),
                 const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Mengambil lokasi...',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                Expanded(
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: status,
+                    builder: (context, text, _) => Text(
+                      text,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -901,6 +918,7 @@ class _PetaLokasiSheet extends StatelessWidget {
                 child: Stack(
                   children: [
                     FlutterMap(
+                      mapController: controller,
                       options: MapOptions(
                         initialCenter: LatLng(-7.9666, 112.6326),
                         initialZoom: 14,
@@ -922,12 +940,7 @@ class _PetaLokasiSheet extends StatelessWidget {
                         ),
                       ],
                     ),
-                    Container(
-                      color: Colors.black26,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                    ),
+                    const SizedBox.shrink(),
                   ],
                 ),
               ),
