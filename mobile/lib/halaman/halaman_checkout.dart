@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../layanan/layanan_lokasi.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../model/isi_keranjang.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
@@ -12,6 +14,7 @@ import '../model/ringkasan_keranjang.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
+import '../umum/galat_ui.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
@@ -152,9 +155,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
       if (!mounted) return;
       setState(() => _keranjang = isi);
     } on GalatApi catch (g) {
-      _tampilkanGalat(g);
+      tampilkanGalat(context, g);
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum());
+      tampilkanGalat(context, GalatApi.umum());
     } finally {
       if (mounted) setState(() => _sedangSegarkanRingkasan = false);
     }
@@ -170,6 +173,19 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     if (_sedangAmbilLokasi) return;
     setState(() => _sedangAmbilLokasi = true);
 
+    final sheetController = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SizedBox(
+          width: 340,
+          height: 420,
+          child: _PetaLokasiSheet(),
+        ),
+      ),
+    );
+
     try {
       final alamat = await const LayananLokasi().ambilKoordinatSaatIni();
       if (!mounted) return;
@@ -178,13 +194,21 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         LayananLokasi.alamatPengirimanPilihan = alamat;
       });
       _bersihkanGalatKolom();
+      if (mounted) Navigator.of(context).pop();
     } on LayananLokasiException catch (galat) {
-      _tampilkanGalat(GalatApi.umum(galat.pesan));
+      if (mounted) {
+        Navigator.of(context).pop();
+        tampilkanGalat(context, GalatApi.umum(galat.pesan));
+      }
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+      if (mounted) {
+        Navigator.of(context).pop();
+        tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+      }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
+    await sheetController;
   }
 
   /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
@@ -194,7 +218,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     if (!(_kunciForm.currentState?.validate() ?? false)) return;
 
     if (_kurirTerpilihId == null || _metodeTerpilih == null) {
-      _tampilkanGalat(GalatApi.umum('Pilih kurir dan metode pembayaran dulu.'));
+      tampilkanGalat(context, GalatApi.umum('Pilih kurir dan metode pembayaran dulu.'));
       return;
     }
 
@@ -229,7 +253,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
       if (!mounted) return;
       _tanganiGalatKirim(g);
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum());
+      tampilkanGalat(context, GalatApi.umum());
     } finally {
       if (mounted) setState(() => _sedangKirim = false);
     }
@@ -245,40 +269,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         );
       });
     }
-    _tampilkanGalat(g);
-  }
-
-  /// Pesan galat untuk ditampilkan inline (422 memakai pesan per kolom).
-  String _pesanGalat(GalatApi g) {
-    if (g.jenis == JenisGalat.validasi &&
-        g.errors != null &&
-        g.errors!.isNotEmpty) {
-      final rincian = g.errors!.values.expand((baris) => baris).join('\n');
-      if (rincian.isNotEmpty) return rincian;
-    }
-
-    // 409 toko_tutup: tampilkan jam operasional dari data server
-    if (g.jenis == JenisGalat.bentrok && g.data?['alasan'] == 'toko_tutup') {
-      final buka = g.data?['jam_buka']?.toString() ?? '08:00';
-      final tutup = g.data?['jam_tutup']?.toString() ?? '22:00';
-      return 'Toko sedang tutup. Pesanan hanya diproses pukul $buka – $tutup WIB.';
-    }
-
-    return g.pesan;
-  }
-
-  void _tampilkanGalat(GalatApi g) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: TemaWarna.merahHabis,
-          duration: const Duration(seconds: 4),
-          content: Text(_pesanGalat(g)),
-        ),
-      );
+    tampilkanGalat(context, g);
   }
 
   void _kembaliKeKatalog() {
@@ -864,6 +855,82 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
               color: warnaNilai ??
                   (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PetaLokasiSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.brown),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Mengambil lokasi...',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(-7.9666, 112.6326),
+                        initialZoom: 14,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.example.makanyuk',
+                        ),
+                        const MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(-7.9666, 112.6326),
+                              width: 40,
+                              height: 40,
+                              child: Icon(Icons.location_pin, color: Colors.red, size: 40),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      color: Colors.black26,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../umum/format_rupiah.dart';
 import '../umum/tema_warna.dart';
 
 /// Widget kartu pesanan untuk riwayat pesanan
@@ -85,7 +86,7 @@ class KartuPesanan extends StatelessWidget {
                     style: const TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
                   ),
                   Text(
-                    TemaWarna.formatRupiah(totalHarga),
+                    formatRupiah(totalHarga),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

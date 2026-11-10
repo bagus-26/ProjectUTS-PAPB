@@ -12,6 +12,7 @@ import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
 import '../widget/gambar_menu.dart';
+import '../umum/galat_ui.dart';
 import 'halaman_checkout.dart';
 
 /// Halaman Keranjang Belanja (Kelompok 1: MakanYuk!)
@@ -93,9 +94,9 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
     try {
       await _layanan.ubahJumlahKeranjang(id: item.id, jumlah: jumlahBaru);
     } on GalatApi catch (g) {
-      _tampilkanGalat(g);
+      tampilkanGalat(context, g);
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum());
+      tampilkanGalat(context, GalatApi.umum());
     } finally {
       // Sumber kebenaran tetap server: segarkan daftar + subtotal.
       await _muatKeranjang(tampilkanMemuat: false);
@@ -111,40 +112,13 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
     try {
       await _layanan.hapusItemKeranjang(item.id);
     } on GalatApi catch (g) {
-      _tampilkanGalat(g);
+      tampilkanGalat(context, g);
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum());
+      tampilkanGalat(context, GalatApi.umum());
     } finally {
       await _muatKeranjang(tampilkanMemuat: false);
       if (mounted) setState(() => _sedangDiproses.remove(item.id));
     }
-  }
-
-  /// Menampilkan galat aksi (409/422/404) di layar yang sama.
-  void _tampilkanGalat(GalatApi galat) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: TemaWarna.merahHabis,
-          duration: const Duration(seconds: 4),
-          content: Text(_pesanGalat(galat)),
-        ),
-      );
-  }
-
-  /// 422 menampilkan daftar galat per kolom, galat lain memakai pesan server.
-  String _pesanGalat(GalatApi galat) {
-    if (galat.jenis == JenisGalat.validasi &&
-        galat.errors != null &&
-        galat.errors!.isNotEmpty) {
-      final rincian = galat.errors!.values.expand((baris) => baris).join('\n');
-      if (rincian.isNotEmpty) return rincian;
-    }
-
-    return galat.pesan;
   }
 
   void _menujuCheckout() {

@@ -8,6 +8,7 @@ import '../model/pesanan.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
+import '../umum/galat_ui.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
@@ -116,11 +117,11 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
 
       if (statusTujuan == 'selesai') _tampilkanKonfirmasiDiterima();
     } on GalatApi catch (g) {
-      _tampilkanGalat(g);
+      tampilkanGalat(context, g);
       // Segarkan agar layar konsisten dengan keadaan server
       await _muatRincian();
     } catch (_) {
-      _tampilkanGalat(GalatApi.umum());
+      tampilkanGalat(context, GalatApi.umum());
     } finally {
       if (mounted) setState(() => _sedangMengirim = false);
     }
@@ -130,20 +131,6 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
   void _bayarSimulasi() => _ubahStatus('menunggu_konfirmasi');
 
   void _konfirmasiDiterima() => _ubahStatus('selesai');
-
-  void _tampilkanGalat(GalatApi g) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: TemaWarna.merahHabis,
-          duration: const Duration(seconds: 4),
-          content: Text(g.pesan),
-        ),
-      );
-  }
 
   /// Kembali ke Katalog dengan tumpukan rute dibersihkan (PRD 7.1).
   void _keKatalog() {
