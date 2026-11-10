@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../model/produk.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
+import 'gambar_menu.dart';
 
 /// Widget kartu item produk dalam katalog (Grid/List item)
 /// Sesuai Kriteria 2: Penanda STOK HABIS jelas dan tombol tambah dimatikan
@@ -53,11 +55,11 @@ class KartuProduk extends StatelessWidget {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          width: double.infinity,
-                          height: double.infinity,
-                          color: TemaWarna.kremTua,
-                          child: _placeholderGambar(),
+                        child: SizedBox.expand(
+                          child: GambarMenu(
+                            nama: produk.nama,
+                            kategori: produk.kategori,
+                          ),
                         ),
                       ),
 
@@ -103,11 +105,13 @@ class KartuProduk extends StatelessWidget {
                                   BoxShadow(
                                     color: Colors.black.withAlpha(15),
                                     blurRadius: 4,
-                                  )
+                                  ),
                                 ],
                               ),
                               child: Icon(
-                                isFavorit ? Icons.favorite : Icons.favorite_border,
+                                isFavorit
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
                                 size: 18,
                                 color: isFavorit
                                     ? Colors.red
@@ -191,7 +195,9 @@ class KartuProduk extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: siapPesan ? TemaWarna.teksUtama : Colors.grey.shade500,
+                    color: siapPesan
+                        ? TemaWarna.teksUtama
+                        : Colors.grey.shade500,
                   ),
                 ),
 
@@ -224,9 +230,12 @@ class KartuProduk extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: siapPesan ? TemaWarna.teksUtama : Colors.grey.shade400,
-                        decoration:
-                            siapPesan ? null : TextDecoration.lineThrough,
+                        color: siapPesan
+                            ? TemaWarna.teksUtama
+                            : Colors.grey.shade400,
+                        decoration: siapPesan
+                            ? null
+                            : TextDecoration.lineThrough,
                       ),
                     ),
                     // Tombol Tambah (+) dimatikan jika stok habis
@@ -245,7 +254,9 @@ class KartuProduk extends StatelessWidget {
                         child: Icon(
                           Icons.add_rounded,
                           size: 20,
-                          color: siapPesan ? Colors.white : Colors.grey.shade500,
+                          color: siapPesan
+                              ? Colors.white
+                              : Colors.grey.shade500,
                         ),
                       ),
                     ),
@@ -258,19 +269,4 @@ class KartuProduk extends StatelessWidget {
       ),
     );
   }
-
-  Widget _placeholderGambar() {
-    return Center(
-      child: Icon(
-        produk.kategori.toLowerCase().contains('minum')
-            ? Icons.local_cafe_rounded
-            : (produk.kategori.toLowerCase().contains('snack')
-                ? Icons.cookie_rounded
-                : Icons.restaurant_rounded),
-        size: 38,
-        color: TemaWarna.cokelatMuda,
-      ),
-    );
-  }
 }
-

@@ -8,6 +8,7 @@ import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
 import '../widget/pemilih_jumlah.dart';
 import '../widget/tombol_utama.dart';
+import '../widget/gambar_menu.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
@@ -295,7 +296,10 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _placeholderBesar(),
+                  GambarMenu(
+                    nama: _produk.nama,
+                    kategori: _produk.kategori,
+                  ),
                   if (!siapPesan)
                     Container(
                       color: Colors.black.withAlpha(140),
@@ -631,18 +635,4 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
     );
   }
 
-  Widget _placeholderBesar() {
-    return Container(
-      color: TemaWarna.kremTua,
-      child: Center(
-        child: Icon(
-          _produk.kategori.toLowerCase().contains('minum')
-              ? Icons.local_cafe_rounded
-              : Icons.restaurant_rounded,
-          size: 72,
-          color: TemaWarna.cokelatUtama.withAlpha(150),
-        ),
-      ),
-    );
-  }
 }

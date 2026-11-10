@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../umum/keadaan_muat.dart';
+import '../widget/gambar_menu.dart';
 
 const Color _warnaCokelat = Color(0xFF6D4C41);
 const Color _warnaKrem = Color(0xFFFFF8F1);
@@ -272,19 +273,15 @@ class _KartuFavorit extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: _warnaKremTua,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              kategori.toLowerCase().contains('minum')
-                  ? Icons.local_drink_outlined
-                  : Icons.restaurant_outlined,
-              size: 30,
-              color: _warnaCokelat,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              width: 68,
+              height: 68,
+              child: GambarMenu(
+                nama: nama,
+                kategori: kategori,
+              ),
             ),
           ),
           const SizedBox(width: 12),
