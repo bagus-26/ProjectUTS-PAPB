@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../layanan/layanan_lokasi.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../model/isi_keranjang.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
@@ -171,6 +173,19 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     if (_sedangAmbilLokasi) return;
     setState(() => _sedangAmbilLokasi = true);
 
+    final sheetController = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SizedBox(
+          width: 340,
+          height: 420,
+          child: _PetaLokasiSheet(),
+        ),
+      ),
+    );
+
     try {
       final alamat = await const LayananLokasi().ambilKoordinatSaatIni();
       if (!mounted) return;
@@ -179,13 +194,21 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         LayananLokasi.alamatPengirimanPilihan = alamat;
       });
       _bersihkanGalatKolom();
+      if (mounted) Navigator.of(context).pop();
     } on LayananLokasiException catch (galat) {
-      tampilkanGalat(context, GalatApi.umum(galat.pesan));
+      if (mounted) {
+        Navigator.of(context).pop();
+        tampilkanGalat(context, GalatApi.umum(galat.pesan));
+      }
     } catch (_) {
-      tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+      if (mounted) {
+        Navigator.of(context).pop();
+        tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+      }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
+    await sheetController;
   }
 
   /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
@@ -832,6 +855,82 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
               color: warnaNilai ??
                   (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PetaLokasiSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.location_on, color: Colors.brown),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Mengambil lokasi...',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(-7.9666, 112.6326),
+                        initialZoom: 14,
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.example.makanyuk',
+                        ),
+                        const MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(-7.9666, 112.6326),
+                              width: 40,
+                              height: 40,
+                              child: Icon(Icons.location_pin, color: Colors.red, size: 40),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      color: Colors.black26,
+                      child: const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
