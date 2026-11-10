@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../umum/format_rupiah.dart';
 import '../umum/tema_warna.dart';
 import '../widget/tombol_utama.dart';
 
@@ -39,7 +40,7 @@ class HalamanKonfirmasiPesanan extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Nomor Pesanan: $nomorPesanan\nTotal: ${TemaWarna.formatRupiah(totalBayar)}',
+                'Nomor Pesanan: $nomorPesanan\nTotal: ${formatRupiah(totalBayar)}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14, color: TemaWarna.teksSekunder, height: 1.5),
               ),

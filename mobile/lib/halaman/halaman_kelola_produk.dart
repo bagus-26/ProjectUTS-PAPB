@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../model/produk.dart';
+import '../umum/format_rupiah.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../widget/tampilan_galat.dart';
@@ -146,7 +147,7 @@ class _HalamanKelolaProdukState extends State<HalamanKelolaProduk> {
               color: Colors.white,
               child: ListTile(
                 title: Text(p.nama, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('${TemaWarna.formatRupiah(p.harga)} • Stok: ${p.stok}'),
+                subtitle: Text('${formatRupiah(p.harga)} • Stok: ${p.stok}'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
