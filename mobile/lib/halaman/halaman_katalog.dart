@@ -14,7 +14,6 @@ import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import 'halaman_keranjang.dart';
-import 'halaman_kelola_produk.dart';
 import 'halaman_menu_favorit.dart';
 import 'halaman_rincian_produk.dart';
 
@@ -239,19 +238,6 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
     if (mounted) await _muatStatusKeranjang();
   }
 
-  /// Alur PRD 7.1: Katalog → Kelola Produk. Data diperbarui saat kembali
-  /// karena CRUD produk bisa saja menambah, mengubah, atau menghapus menu.
-  Future<void> _bukaKelolaProduk() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const HalamanKelolaProduk()),
-    );
-    if (!mounted) return;
-    await Future.wait([
-      _muatKategori(),
-      _muatDataProduk(),
-    ]);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -294,16 +280,6 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
           ],
         ),
         actions: [
-          // Entri Katalog → Kelola Produk (PRD 7.1)
-          IconButton(
-            tooltip: 'Kelola Produk',
-            icon: const Icon(
-              Icons.storefront_outlined,
-              color: TemaWarna.teksUtama,
-              size: 25,
-            ),
-            onPressed: _bukaKelolaProduk,
-          ),
           // Ikon Keranjang dengan Lencana Jumlah (Kriteria 6 Spesifikasi)
           Padding(
             padding: const EdgeInsets.only(right: 12),
