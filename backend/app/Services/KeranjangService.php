@@ -53,7 +53,12 @@ class KeranjangService
      */
     public function tambah(int $pelangganId, array $data): array
     {
-        $produk = Produk::query()->find((int) $data['produk_id']);
+        // Lock baris produk agar pemeriksaan stok + tulisan keranjang atomic
+        // dan dua request concurrent tidak melebihi stok (check-then-write).
+        $produk = Produk::query()
+            ->whereKey((int) $data['produk_id'])
+            ->lockForUpdate()
+            ->first();
 
         if ($produk === null) {
             throw new ApiException('Produk tidak ditemukan.', 422, null, [
@@ -120,7 +125,6 @@ class KeranjangService
     public function ubah(int $pelangganId, int $id, int $jumlah): array
     {
         $item = Keranjang::query()
-            ->with(['produk', 'varian'])
             ->where('pelanggan_id', $pelangganId)
             ->whereKey($id)
             ->first();
@@ -129,7 +133,12 @@ class KeranjangService
             throw new ApiException('Item keranjang tidak ditemukan.', 404);
         }
 
-        $produk = $item->produk;
+        // Lock baris produk agar perubahan jumlah tidak melebihi stok saat
+        // ada request concurrent pada produk yang sama.
+        $produk = Produk::query()
+            ->whereKey($item->produk_id)
+            ->lockForUpdate()
+            ->first();
 
         if ($produk === null) {
             throw new ApiException('Produk pada keranjang sudah tidak tersedia.', 409, [

@@ -86,8 +86,8 @@ Kontrak API menetapkan header `Authorization: Bearer <token>`. Nilai untuk data 
 
 | Pelanggan | Token |
 |---|---|
-| Pelanggan Uji 1 | `kelompok1-token-statis` |
-| Pelanggan Uji 2 | `kelompok1-token-statis-2` |
+| Pelanggan Uji 1 | diatur per deploy (`.env` / seeder, tidak dipublikasikan) |
+| Pelanggan Uji 2 | diatur per deploy (`.env` / seeder, tidak dipublikasikan) |
 
 Token salah atau kosong dibalas `401` dengan pembungkus yang sama.
 
@@ -175,7 +175,7 @@ Bantuan AI: fondasi awal PM-01/PM-02/PM-03/PM-05 (struktur repo, skeleton Larave
 Pustaka produksi:
 
 - Laravel 12 dan ekosistemnya (`laravel/framework`, `laravel/tinker`).
-- Flutter dengan paket `http` (permintaan HTTP). Paket `uuid` direncanakan dalam PRD untuk kunci idempoten checkout, tetapi belum tercantum di `mobile/pubspec.yaml`.
+- Flutter dengan paket `http` (permintaan HTTP) dan `uuid` (kunci idempoten checkout, terdaftar di `mobile/pubspec.yaml`).
 
 Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak ada payment gateway maupun API ekspedisi.
 
