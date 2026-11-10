@@ -11,6 +11,7 @@ import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
+import '../widget/gambar_menu.dart';
 import 'halaman_checkout.dart';
 
 /// Halaman Keranjang Belanja (Kelompok 1: MakanYuk!)
@@ -148,11 +149,8 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
 
   void _menujuCheckout() {
     // Checkout memuat ulang `GET /keranjang?kurir_id=` sendiri dari server
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const HalamanCheckout(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => const HalamanCheckout()));
   }
 
   @override
@@ -186,10 +184,7 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
         return const TampilanMuat(pesan: 'Memuat keranjang belanjamu...');
 
       case KeadaanMuat.galat:
-        return TampilanGalat(
-          galat: _galat,
-          saatCobaLagi: _muatKeranjang,
-        );
+        return TampilanGalat(galat: _galat, saatCobaLagi: _muatKeranjang);
 
       case KeadaanMuat.kosong:
         // Keadaan kosong ramah + tombol kembali ke katalog (PRD 7.1)
@@ -219,15 +214,20 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
               const SizedBox(height: 12),
               // Voucher Promo Banner (design Figma)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: TemaWarna.kremPeach,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.discount_outlined, color: TemaWarna.cokelatUtama),
+                    Icon(
+                      Icons.discount_outlined,
+                      color: TemaWarna.cokelatUtama,
+                    ),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -272,17 +272,12 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Placeholder gambar (API tidak memiliki kolom foto, PRD 6.4)
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: Container(
+            child: SizedBox(
               width: 70,
               height: 70,
-              color: TemaWarna.kremTua,
-              child: const Icon(
-                Icons.restaurant_rounded,
-                color: TemaWarna.cokelatUtama,
-              ),
+              child: GambarMenu(nama: item.nama, kategori: 'Makanan'),
             ),
           ),
           const SizedBox(width: 14),
@@ -338,8 +333,7 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
                 tooltip: 'Hapus item',
                 icon: const Icon(Icons.delete_outline_rounded, size: 20),
                 color: Colors.grey.shade500,
-                onPressed:
-                    diproses ? null : () => _hapusItem(item),
+                onPressed: diproses ? null : () => _hapusItem(item),
               ),
               if (diproses)
                 const SizedBox(
