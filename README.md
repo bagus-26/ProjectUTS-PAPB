@@ -64,7 +64,7 @@ flutter pub get
 flutter run
 ```
 
-Untuk langkah lengkap menjalankan frontend di MEmu Player pada Windows, lihat [mobile/PANDUAN-RUN-MEMU.md](mobile/PANDUAN-RUN-MEMU.md). Alamat server diatur di `mobile/lib/konfigurasi/konfigurasi.dart`: emulator Android memakai `http://10.0.2.2:8000/api` secara default. Untuk MEmu atau emulator/perangkat yang memakai alamat host berbeda, jalankan Flutter dengan `--dart-define=API_BASE_URL=http://192.168.1.10:8000/api` (ganti alamat contoh dengan IPv4 laptop backend). Backend harus listen pada semua interface:
+Untuk langkah lengkap menjalankan aplikasi di HP Android fisik melalui USB dan Wi-Fi pada Windows, lihat [mobile/PANDUAN-RUN-HP.md](mobile/PANDUAN-RUN-HP.md). Alamat backend dapat diatur saat menjalankan Flutter dengan `--dart-define=API_BASE_URL=http://<IPv4-laptop>:8000/api`; gunakan alamat IPv4 laptop yang menjalankan backend, bukan `localhost`. Backend harus listen pada semua interface:
 
 ```bash
 php artisan serve --host=0.0.0.0 --port=8000
