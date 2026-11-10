@@ -170,6 +170,27 @@ class FiturApiTest extends TestCase
         $this->assertDatabaseMissing('keranjang', ['pelanggan_id' => 1]);
     }
 
+    public function test_checkout_diluar_jam_buka_ditolak_dengan_409_toko_tutup(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-08 22:00:00', 'Asia/Jakarta'));
+
+        $this->withToken('kelompok1-token-statis')
+            ->postJson('/api/keranjang', ['produk_id' => 1, 'jumlah' => 1, 'varian_id' => 1])
+            ->assertCreated();
+
+        $this->withToken('kelompok1-token-statis')
+            ->postJson('/api/checkout', [
+                'nama_penerima' => 'Demo',
+                'alamat_penerima' => 'Malang',
+                'kurir_id' => 1,
+                'metode_pembayaran' => 'transfer_manual',
+            ], ['X-Kunci-Idempoten' => '93333333-3333-4333-8333-333333333333'])
+            ->assertStatus(409)
+            ->assertJsonPath('data.alasan', 'toko_tutup');
+
+        Carbon::setTestNow();
+    }
+
     public function test_transisi_status_pesanan_mengikuti_alur_yang_diizinkan(): void
     {
         $pesanan = Pesanan::query()->where('pelanggan_id', 1)->firstOrFail();

@@ -6,6 +6,7 @@ import '../model/produk.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
+import '../umum/galat_ui.dart';
 import '../widget/pemilih_jumlah.dart';
 import '../widget/tombol_utama.dart';
 import '../widget/gambar_menu.dart';
@@ -107,19 +108,6 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
   int get _tambahanTerpilih =>
       _produk.tambahanHargaVarian(_porsiTerpilih);
 
-  /// Pesan galat untuk ditampilkan inline (PRD 7.3).
-  /// 422 menampilkan daftar galat per kolom, 409 memakai pesan dari server.
-  String _pesanGalat(GalatApi galat) {
-    if (galat.jenis == JenisGalat.validasi &&
-        galat.errors != null &&
-        galat.errors!.isNotEmpty) {
-      final rincian = galat.errors!.values.expand((baris) => baris).join('\n');
-      if (rincian.isNotEmpty) return rincian;
-    }
-
-    return galat.pesan;
-  }
-
   /// Mengirim permintaan penambahan item ke server (POST /api/keranjang)
   Future<void> _tambahKeKeranjang() async {
     if (!_produk.dapatDipesan) return;
@@ -175,7 +163,7 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: TemaWarna.merahHabis,
           duration: const Duration(seconds: 4),
-          content: Text(_pesanGalat(galat)),
+          content: Text(pesanGalat(galat)),
         ),
       );
     } catch (_) {

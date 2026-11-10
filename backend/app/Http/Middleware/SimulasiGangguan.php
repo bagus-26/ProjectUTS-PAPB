@@ -20,8 +20,10 @@ class SimulasiGangguan
 
         $detik = (int) env('SIMULASI_LAMBAT_DETIK', 0);
 
-        if ($detik > 0) {
-            sleep($detik);
+        if ($detik > 0 && config('app.env') === 'local') {
+            // Simulasi lambat demo dihindari di sini: sleep() mengikat proses
+            // request selama $detik detik dan bisa menahan semua worker.
+            // Aktifkan lewat tes terpisah / job antrian bila diperlukan.
         }
 
         $galat500 = filter_var(env('SIMULASI_GALAT_500', false), FILTER_VALIDATE_BOOLEAN);
