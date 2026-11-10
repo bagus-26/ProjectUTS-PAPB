@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../layanan/galat_api.dart';
@@ -38,14 +40,35 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
   GalatApi? _galat;
 
   bool _sedangMengirim = false;
+  Timer? _timerPembaruan;
 
   @override
   void initState() {
     super.initState();
     _muatRincian();
+    _timerPembaruan = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _muatRincianSenyap(),
+    );
   }
 
-  /// `GET /api/pesanan/{id}` — 404 dipetakan ke keadaan kosong (PRD 7.3).
+  @override
+  void dispose() {
+    _timerPembaruan?.cancel();
+    super.dispose();
+  }
+
+  /// Pembaruan senyap tiap 3 detik: tidak mengubah keadaan memuat.
+  Future<void> _muatRincianSenyap() async {
+    if (_sedangMengirim) return;
+    try {
+      final hasil = await _layanan.ambilRincianPesanan(widget.pesananId);
+      if (!mounted) return;
+      setState(() => _pesanan = hasil);
+    } catch (_) {
+      // Abaikan galat polling agar tidak mengganggu UI.
+    }
+  }
   Future<void> _muatRincian() async {
     setState(() {
       _keadaan = KeadaanMuat.memuat;

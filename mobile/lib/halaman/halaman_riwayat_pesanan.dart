@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../model/pesanan.dart';
@@ -36,14 +39,38 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
   String _filterTerpilih = 'Semua';
   bool _bannerTampil = true;
   bool _sedangPesanLagi = false;
+  Timer? _timerPembaruan;
 
   @override
   void initState() {
     super.initState();
     _muatRiwayat();
+    _timerPembaruan = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _muatRiwayatSenyap(),
+    );
   }
 
-  /// `GET /api/pesanan` — daftar terbaru dahulu (diatur server).
+  @override
+  void dispose() {
+    _timerPembaruan?.cancel();
+    super.dispose();
+  }
+
+  /// Pembaruan senyap tiap 3 detik.
+  Future<void> _muatRiwayatSenyap() async {
+    if (_sedangPesanLagi) return;
+    try {
+      final data = await _layanan.ambilDaftarPesanan();
+      if (!mounted) return;
+      setState(() {
+        _daftarPesanan = data;
+        _keadaan = data.isEmpty ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
+      });
+    } catch (_) {
+      // Abaikan galat polling.
+    }
+  }
   Future<void> _muatRiwayat() async {
     setState(() {
       _keadaan = KeadaanMuat.memuat;
