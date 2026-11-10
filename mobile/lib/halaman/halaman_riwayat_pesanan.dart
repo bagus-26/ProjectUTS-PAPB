@@ -11,6 +11,7 @@ import '../umum/format_rupiah.dart';
 import '../widget/tampilan_galat.dart';
 import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
+import '../widget/gambar_menu.dart';
 import 'halaman_detail_pesanan.dart';
 import 'halaman_utama.dart';
 
@@ -392,13 +393,14 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Container(
+                  child: SizedBox(
                     width: 56,
                     height: 56,
-                    color: TemaWarna.kremTua,
-                    child: const Icon(
-                      Icons.restaurant_rounded,
-                      color: TemaWarna.cokelatUtama,
+                    child: GambarMenu(
+                      nama: pesanan.items.isEmpty
+                          ? ''
+                          : pesanan.items.first.namaProduk,
+                      kategori: 'Makanan',
                     ),
                   ),
                 ),

@@ -3,15 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:projek_makanyuk/halaman/halaman_splash.dart';
 import 'package:projek_makanyuk/model/produk.dart';
 import 'package:projek_makanyuk/widget/chip_kategori.dart';
+import 'package:projek_makanyuk/widget/gambar_menu.dart';
 import 'package:projek_makanyuk/widget/pemilih_jumlah.dart';
 
 void main() {
   testWidgets('Splash MakanYuk tampil saat aplikasi dibuka', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: HalamanSplash()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: HalamanSplash()));
 
     expect(find.text('MakanYuk!'), findsOneWidget);
     expect(find.text('Menu lezat, tinggal pesan'), findsOneWidget);
@@ -99,5 +98,26 @@ void main() {
     expect(find.text('Semua'), findsOneWidget);
     expect(find.text('Minuman'), findsOneWidget);
     expect(find.text('Makanan'), findsOneWidget);
+  });
+
+  testWidgets('GambarMenu memakai aset untuk nama menu dari riwayat', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox(
+          width: 80,
+          height: 80,
+          child: GambarMenu(nama: 'Soto Ayam Lamongan', kategori: 'Makanan'),
+        ),
+      ),
+    );
+
+    final gambar = tester.widget<Image>(find.byType(Image));
+    expect(gambar.image, isA<AssetImage>());
+    expect(
+      (gambar.image as AssetImage).assetName,
+      'assets/images/menu/Soto Lamongan.jpg',
+    );
   });
 }
