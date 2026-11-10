@@ -45,6 +45,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
 
   String _kategoriTerpilih = 'Semua';
   String _kataKunciCari = '';
+  String _filterStok = 'Tersedia'; // 'Tersedia' atau 'Stok Habis'
   Timer? _debounceCari;
 
   /// Daftar kategori chip — bersumber dari `GET /api/kategori` (PRD 6 & 7.1).
@@ -74,24 +75,65 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
   /// Bila gagal, chip tetap menampilkan 'Semua' agar katalog tetap terpakai;
   /// penyaringan lewat server tetap berfungsi karena kategori lain menyusul
   /// dipilih dari daftar yang berhasil dimuat.
+  /// Kategori 'Makanan' dan 'Minuman' selalu dipastikan hadir (bukan hanya
+  /// 'Semua') meski API gagal atau mengembalikan daftar kosong.
   Future<void> _muatKategori() async {
     try {
       final hasil = await _layanan.ambilKategori();
-      if (!mounted || hasil.isEmpty) return;
+      if (!mounted) return;
       setState(() {
         _kategoriList
           ..clear()
           ..addAll(['Semua', ...hasil]);
+        // Pastikan 'Makanan' dan 'Minuman' selalu tersedia sebagai kategori.
+        if (!_kategoriList.contains('Makanan')) {
+          _kategoriList.add('Makanan');
+        }
+        if (!_kategoriList.contains('Minuman')) {
+          _kategoriList.add('Minuman');
+        }
         // Kategori terpilih bisa saja tidak ada lagi di daftar terbaru
         if (!_kategoriList.contains(_kategoriTerpilih)) {
           _kategoriTerpilih = 'Semua';
         }
       });
     } on GalatApi {
-      // Chip bersifat pendukung: bila gagal, biarkan dengan 'Semua'.
+      // Chip bersifat pendukung: bila gagal, tampilkan fallback dengan
+      // 'Semua', 'Makanan', dan 'Minuman' agar katalog tetap terpakai.
+      if (!mounted) return;
+      setState(() {
+        _kategoriList
+          ..clear()
+          ..addAll(['Semua', 'Makanan', 'Minuman']);
+      });
     } catch (_) {
       // Galat tak terduga (mis. jaringan) tidak boleh menjatuhkan katalog.
+      if (!mounted) return;
+      setState(() {
+        _kategoriList
+          ..clear()
+          ..addAll(['Semua', 'Makanan', 'Minuman']);
+      });
     }
+  }
+
+  /// Daftar produk yang difilter stoknya dan diurutkan.
+  /// Produk favorit diletakkan di paling atas, diikuti produk non-favorit.
+  /// Saat _filterStok = 'Tersedia', hanya produk yang dapat dipesan yang ditampilkan.
+  List<Produk> get _daftarProdukTampil {
+    final daftar = _daftarProduk.where((p) {
+      if (_filterStok == 'Tersedia') {
+        return p.dapatDipesan;
+      }
+      return true; // Tampilkan semua, termasuk stok habis
+    }).toList(growable: false);
+
+    daftar.sort((a, b) {
+      final aFavorit = FavoritLokal.berisi(a.id) ? 1 : 0;
+      final bFavorit = FavoritLokal.berisi(b.id) ? 1 : 0;
+      return bFavorit.compareTo(aFavorit);
+    });
+    return daftar;
   }
 
   /// Memanggil endpoint GET /api/produk?kategori=...&cari=...
@@ -362,7 +404,34 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                   ),
                 ),
 
-                // 3. Judul Menu
+                // 3. Filter Tersedia / Stok Habis
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'Tersedia',
+                          label: Text('Tersedia'),
+                          icon: Icon(Icons.check_circle_outline, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: 'Stok Habis',
+                          label: Text('Stok Habis'),
+                          icon: Icon(Icons.remove_circle_outline, size: 18),
+                        ),
+                      ],
+                      selected: {_filterStok},
+                      onSelectionChanged: (pilihan) {
+                        setState(() {
+                          _filterStok = pilihan.first;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+
+                // 4. Judul Menu
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -373,7 +442,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                           _kataKunciCari.isNotEmpty
                               ? 'Hasil Pencarian "$_kataKunciCari"'
                               : (_kategoriTerpilih == 'Semua'
-                                  ? 'Menu Terlaris'
+                                  ? 'Semua Menu'
                                   : 'Menu $_kategoriTerpilih'),
                           style: const TextStyle(
                             fontSize: 18,
@@ -383,7 +452,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                         ),
                         if (_keadaan == KeadaanMuat.berhasil)
                           Text(
-                            '${_daftarProduk.length} menu',
+                            '${_daftarProdukTampil.length} menu',
                             style: const TextStyle(
                               fontSize: 13,
                               color: TemaWarna.teksSekunder,
@@ -470,9 +539,9 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                 crossAxisSpacing: 14,
                 childAspectRatio: 0.68,
               ),
-              delegate: SliverChildBuilderDelegate(
+                delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final produk = _daftarProduk[index];
+                  final produk = _daftarProdukTampil[index];
                   return KartuProduk(
                     produk: produk,
                     isFavorit: FavoritLokal.berisi(produk.id),
@@ -485,7 +554,7 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
                     },
                   );
                 },
-                childCount: _daftarProduk.length,
+                childCount: _daftarProdukTampil.length,
               ),
             ),
           ),
