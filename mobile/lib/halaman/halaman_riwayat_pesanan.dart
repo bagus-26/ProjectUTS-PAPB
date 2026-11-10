@@ -180,6 +180,19 @@ class _HalamanRiwayatPesananState extends State<HalamanRiwayatPesanan> {
         backgroundColor: TemaWarna.latarKrem,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_rounded,
+            color: TemaWarna.teksUtama,
+          ),
+          onPressed: () {
+            if (widget.saatPilihMenu != null) {
+              widget.saatPilihMenu!();
+            } else {
+              _keKatalog();
+            }
+          },
+        ),
         title: const Text(
           'Riwayat Pesanan',
           style: TextStyle(
