@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Exceptions\ApiException;
+use App\Models\Keranjang;
 use App\Models\Pesanan;
 use App\Models\Produk;
 use App\Support\StatusPesanan;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class ProdukService
 {
@@ -49,18 +51,21 @@ class ProdukService
      */
     public function hapus(Produk $produk): void
     {
-        $pesananAktif = Pesanan::query()
-            ->whereIn('status', StatusPesanan::aktif())
-            ->whereHas('detail', fn ($query) => $query->where('produk_id', $produk->id))
-            ->exists();
+        DB::transaction(function () use ($produk): void {
+            $pesananAktif = Pesanan::query()
+                ->whereIn('status', StatusPesanan::aktif())
+                ->whereHas('detail', fn ($query) => $query->where('produk_id', $produk->id))
+                ->exists();
 
-        if ($pesananAktif) {
-            throw new ApiException('Produk masih digunakan dalam pesanan aktif.', 409, [
-                'alasan' => 'produk_dipakai_pesanan_aktif',
-                'produk_id' => $produk->id,
-            ]);
-        }
+            if ($pesananAktif) {
+                throw new ApiException('Produk masih digunakan dalam pesanan aktif.', 409, [
+                    'alasan' => 'produk_dipakai_pesanan_aktif',
+                    'produk_id' => $produk->id,
+                ]);
+            }
 
-        $produk->delete();
+            Keranjang::query()->where('produk_id', $produk->id)->delete();
+            $produk->delete();
+        }, 3);
     }
 }
