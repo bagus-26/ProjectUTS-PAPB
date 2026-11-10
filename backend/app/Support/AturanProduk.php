@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Validation\Rule;
+
 class AturanProduk
 {
     /**
@@ -14,7 +16,7 @@ class AturanProduk
         return [
             'nama' => ['required', 'string', 'max:150'],
             'harga' => ['required', 'integer', 'min:1', 'max:4294967295'],
-            'kategori' => ['required', 'string', 'max:50'],
+            'kategori' => ['required', 'string', Rule::in(self::kategori())],
             'stok' => ['required', 'integer', 'min:0', 'max:4294967295'],
             'tersedia' => ['required', 'boolean'],
             'deskripsi' => ['nullable', 'string'],
