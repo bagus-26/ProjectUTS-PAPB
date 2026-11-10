@@ -176,22 +176,26 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     setState(() => _sedangAmbilLokasi = true);
     _statusLokasi.value = 'Mengambil lokasi...';
 
-    final sheetController = showDialog<void>(
+    final dialogSelesai = showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: SizedBox(
           width: 340,
           height: 420,
-          child: _PetaLokasiSheet(controller: _mapController, status: _statusLokasi),
+          child: _PetaLokasiSheet(
+            controller: _mapController,
+            status: _statusLokasi,
+            saatBatal: () => Navigator.of(dialogContext).pop(false),
+          ),
         ),
       ),
     );
 
     try {
       final layanan = const LayananLokasi();
-    final posisi = await layanan.ambilPosisiSaatIni();
+      final posisi = await layanan.ambilPosisiSaatIni();
     if (!mounted) return;
     _mapController.move(LatLng(posisi.latitude, posisi.longitude), 15);
     await Future.delayed(const Duration(seconds: 1));
@@ -207,18 +211,21 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     // Tidak menutup otomatis; pengguna menutup manual via tombol X.
     } on LayananLokasiException catch (galat) {
       if (mounted) {
-        Navigator.of(context).pop();
+        Navigator.of(context, rootNavigator: true).pop();
         tampilkanGalat(context, GalatApi.umum(galat.pesan));
       }
     } catch (_) {
       if (mounted) {
-        Navigator.of(context).pop();
-        tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+        Navigator.of(context, rootNavigator: true).pop();
+        tampilkanGalat(
+          context,
+          GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'),
+        );
       }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
-    await sheetController;
+    await dialogSelesai;
   }
 
   /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
@@ -876,7 +883,13 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 class _PetaLokasiSheet extends StatelessWidget {
   final MapController controller;
   final ValueNotifier<String> status;
-  const _PetaLokasiSheet({required this.controller, required this.status});
+  final VoidCallback saatBatal;
+
+  const _PetaLokasiSheet({
+    required this.controller,
+    required this.status,
+    required this.saatBatal,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -905,7 +918,7 @@ class _PetaLokasiSheet extends StatelessWidget {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: saatBatal,
                 ),
               ],
             ),

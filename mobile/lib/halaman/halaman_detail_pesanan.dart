@@ -117,10 +117,12 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
 
       if (statusTujuan == 'selesai') _tampilkanKonfirmasiDiterima();
     } on GalatApi catch (g) {
+      if (!mounted) return;
       tampilkanGalat(context, g);
       // Segarkan agar layar konsisten dengan keadaan server
       await _muatRincian();
     } catch (_) {
+      if (!mounted) return;
       tampilkanGalat(context, GalatApi.umum());
     } finally {
       if (mounted) setState(() => _sedangMengirim = false);

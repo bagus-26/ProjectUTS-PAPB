@@ -66,98 +66,110 @@ class _HalamanAkunState extends State<HalamanAkun> {
     );
     String? galat;
     var mengambilLokasi = false;
+    var dialogMasihAktif = true;
     final hasil = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, ubahDialog) => AlertDialog(
-          title: const Text('Alamat untuk checkout'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                minLines: 2,
-                maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Alamat pengiriman',
-                  hintText: 'Lengkapi jalan, nomor rumah, dan patokan',
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: mengambilLokasi
-                      ? null
-                      : () async {
-                          ubahDialog(() {
-                            mengambilLokasi = true;
-                            galat = null;
-                          });
-                          try {
-                            controller.text = await const LayananLokasi()
-                                .ambilKoordinatSaatIni();
-                          } on LayananLokasiException catch (error) {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() => galat = error.pesan);
-                            }
-                          } catch (_) {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() {
-                                galat =
-                                    'Lokasi tidak dapat diambil. Coba lagi.';
-                              });
-                            }
-                          } finally {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() => mengambilLokasi = false);
-                            }
-                          }
-                        },
-                  icon: mengambilLokasi
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded),
-                  label: Text(
-                    mengambilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi',
+      builder: (dialogContext) => PopScope<String>(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) dialogMasihAktif = false;
+        },
+        child: StatefulBuilder(
+          builder: (context, ubahDialog) => AlertDialog(
+            title: const Text('Alamat untuk checkout'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  minLines: 2,
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Alamat pengiriman',
+                    hintText: 'Lengkapi jalan, nomor rumah, dan patokan',
                   ),
                 ),
-              ),
-              const Text(
-                'Koordinat perangkat bukan alamat lengkap. Lengkapi detail pengiriman sebelum checkout.',
-                style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
-              ),
-              if (galat != null) ...[
-                const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    galat!,
-                    style: const TextStyle(color: TemaWarna.merahHabis),
+                  child: OutlinedButton.icon(
+                    onPressed: mengambilLokasi
+                        ? null
+                        : () async {
+                            ubahDialog(() {
+                              mengambilLokasi = true;
+                              galat = null;
+                            });
+                            try {
+                              final alamat = await const LayananLokasi()
+                                  .ambilKoordinatSaatIni();
+                              if (!dialogMasihAktif) return;
+                              controller.text = alamat;
+                            } on LayananLokasiException catch (error) {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() => galat = error.pesan);
+                              }
+                            } catch (_) {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() {
+                                  galat =
+                                      'Lokasi tidak dapat diambil. Coba lagi.';
+                                });
+                              }
+                            } finally {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() => mengambilLokasi = false);
+                              }
+                            }
+                          },
+                    icon: mengambilLokasi
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_rounded),
+                    label: Text(
+                      mengambilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi',
+                    ),
                   ),
                 ),
+                const Text(
+                  'Koordinat perangkat bukan alamat lengkap. Lengkapi detail pengiriman sebelum checkout.',
+                  style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
+                ),
+                if (galat != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      galat!,
+                      style: const TextStyle(color: TemaWarna.merahHabis),
+                    ),
+                  ),
+                ],
               ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  dialogMasihAktif = false;
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.trim().isEmpty) {
+                    ubahDialog(() => galat = 'Alamat pengiriman wajib diisi.');
+                    return;
+                  }
+                  dialogMasihAktif = false;
+                  Navigator.of(dialogContext).pop(controller.text.trim());
+                },
+                child: const Text('Gunakan alamat'),
+              ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().isEmpty) {
-                  ubahDialog(() => galat = 'Alamat pengiriman wajib diisi.');
-                  return;
-                }
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              },
-              child: const Text('Gunakan alamat'),
-            ),
-          ],
         ),
       ),
     );

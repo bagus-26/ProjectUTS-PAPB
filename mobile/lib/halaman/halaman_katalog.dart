@@ -125,7 +125,10 @@ class _HalamanKatalogState extends State<HalamanKatalog> {
       if (_filterStok == 'Tersedia') {
         return p.dapatDipesan;
       }
-      return true; // Tampilkan semua, termasuk stok habis
+      if (_filterStok == 'Stok Habis') {
+        return !p.dapatDipesan; // Hanya tampilkan yang stok habis
+      }
+      return true; // 'Semua' — tampilkan semua produk
     }).toList(growable: false);
 
     daftar.sort((a, b) {
