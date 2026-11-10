@@ -1,4 +1,4 @@
-# Toko Online Kelompok 1 — Makanan dan Minuman Siap Saji
+# Toko Online Kelompok 1 — Makanan dan Minuman Siap Saji (MakanYuk!)
 
 Repositori tugas pengganti UTS mata kuliah Pemrograman Aplikasi Perangkat Bergerak (PAPB) dan Sistem Terdistribusi. Sesuai PRD Bagian 12.1, proyek terdiri atas REST API Laravel + MySQL di `backend/`, aplikasi Flutter di `mobile/`, dokumentasi di `docs/`, dan README ini.
 
