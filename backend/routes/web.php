@@ -6,9 +6,13 @@ use App\Http\Controllers\Admin\PesananController;
 use App\Http\Controllers\Admin\ProdukController;
 use App\Http\Controllers\Admin\ReferensiController;
 use App\Http\Controllers\Admin\TokoController;
+use App\Http\Controllers\DokumentasiApiController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/admin');
+
+Route::get('/api', [DokumentasiApiController::class, 'index'])->name('dokumentasi.api');
+Route::get('/api/openapi.json', [DokumentasiApiController::class, 'spesifikasi'])->name('dokumentasi.api.spesifikasi');
 
 Route::prefix('admin')->name('admin.')->group(function (): void {
     Route::get('login', [AuthController::class, 'tampilkanLogin'])->name('login');

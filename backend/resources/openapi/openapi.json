@@ -1,0 +1,2194 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Makan Yuk API",
+    "version": "1.0.0",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "description": "REST API untuk katalog produk, keranjang, checkout, dan pesanan. Dokumentasi internal Kelompok 01.\n\n- Base URL: http://127.0.0.1:8000/api\n- Semua endpoint wajib menyertakan header `Authorization: Bearer <token pelanggan>`. Token berasal dari seeder/deploy (`backend/database/seeders/PelangganSeeder.php`).\n- Pembungkus sukses: `status`, `code` (string), `message`, `data`.\n- Pembungkus gagal: `status`, `code` (string), `message`, `data`, dan `errors` khusus 422.\n- Checkout wajib menyertakan header `X-Kunci-Idempoten` berisi UUID."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000/api",
+      "description": "Base URL lokal (default)"
+    },
+    {
+      "url": "/api",
+      "description": "Base URL relatif terhadap host yang sedang dipakai"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Produk",
+      "description": "Katalog dan pengelolaan produk"
+    },
+    {
+      "name": "Kategori",
+      "description": "Daftar kategori untuk filter katalog"
+    },
+    {
+      "name": "Keranjang",
+      "description": "Keranjang belanja pelanggan"
+    },
+    {
+      "name": "Kurir",
+      "description": "Daftar kurir dan tarif pengiriman"
+    },
+    {
+      "name": "Metode Pembayaran",
+      "description": "Daftar metode pembayaran simulasi"
+    },
+    {
+      "name": "Checkout",
+      "description": "Pembuatan pesanan dari isi keranjang"
+    },
+    {
+      "name": "Pesanan",
+      "description": "Riwayat, rincian, dan perubahan status pesanan"
+    }
+  ],
+  "paths": {
+    "/produk": {
+      "get": {
+        "tags": ["Produk"],
+        "summary": "Daftar produk",
+        "description": "Mengambil seluruh produk, diurutkan berdasarkan `id`. Filter `kategori` bersifat pencocokan persis, sedangkan `cari` mencari potongan nama produk.",
+        "operationId": "daftarProduk",
+        "parameters": [
+          {
+            "name": "kategori",
+            "in": "query",
+            "required": false,
+            "description": "Filter kategori produk.",
+            "schema": {
+              "type": "string",
+              "enum": ["Makanan", "Minuman", "Snack"]
+            },
+            "example": "Makanan"
+          },
+          {
+            "name": "cari",
+            "in": "query",
+            "required": false,
+            "description": "Cari berdasarkan potongan nama produk (LIKE).",
+            "schema": {
+              "type": "string"
+            },
+            "example": "nasi"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar produk berhasil diambil. Bila kosong tetap 200 dengan `data: []`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsDaftarProduk"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Daftar produk berhasil diambil",
+                  "data": [
+                    {
+                      "id": 1,
+                      "nama": "Nasi Goreng Spesial",
+                      "harga": 25000,
+                      "kategori": "Makanan",
+                      "stok": 30,
+                      "tersedia": true,
+                      "deskripsi": "Nasi goreng dengan telur, ayam, dan kerupuk.",
+                      "bisa_pedas": true,
+                      "waktu_persiapan_menit": 15,
+                      "varian": [
+                        {
+                          "id": 1,
+                          "nama": "Reguler",
+                          "tambahan_harga": 0
+                        },
+                        {
+                          "id": 2,
+                          "nama": "Jumbo",
+                          "tambahan_harga": 8000
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Produk"],
+        "summary": "Tambah produk",
+        "description": "Membuat produk baru. Varian tidak dikirim lewat endpoint ini sehingga `varian` pada respons berisi array kosong.",
+        "operationId": "tambahProduk",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProdukInput"
+              },
+              "example": {
+                "nama": "Nasi Goreng Spesial",
+                "harga": 25000,
+                "kategori": "Makanan",
+                "stok": 30,
+                "tersedia": true,
+                "deskripsi": "Nasi goreng dengan telur, ayam, dan kerupuk.",
+                "bisa_pedas": true,
+                "waktu_persiapan_menit": 15
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Produk berhasil ditambahkan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsProduk"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "201",
+                  "message": "Produk berhasil ditambahkan",
+                  "data": {
+                    "id": 11,
+                    "nama": "Nasi Goreng Spesial",
+                    "harga": 25000,
+                    "kategori": "Makanan",
+                    "stok": 30,
+                    "tersedia": true,
+                    "deskripsi": "Nasi goreng dengan telur, ayam, dan kerupuk.",
+                    "bisa_pedas": true,
+                    "waktu_persiapan_menit": 15,
+                    "varian": []
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "description": "Validasi gagal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "nama": ["The nama field is required."],
+                    "harga": ["The harga field is required."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/produk/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID produk.",
+          "schema": {
+            "type": "integer"
+          },
+          "example": 1
+        }
+      ],
+      "get": {
+        "tags": ["Produk"],
+        "summary": "Rincian produk",
+        "operationId": "rincianProduk",
+        "responses": {
+          "200": {
+            "description": "Rincian produk beserta varian aktif.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsProduk"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Rincian produk berhasil diambil",
+                  "data": {
+                    "id": 1,
+                    "nama": "Nasi Goreng Spesial",
+                    "harga": 25000,
+                    "kategori": "Makanan",
+                    "stok": 30,
+                    "tersedia": true,
+                    "deskripsi": "Nasi goreng dengan telur, ayam, dan kerupuk.",
+                    "bisa_pedas": true,
+                    "waktu_persiapan_menit": 15,
+                    "varian": [
+                      {
+                        "id": 1,
+                        "nama": "Reguler",
+                        "tambahan_harga": 0
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Produk tidak ditemukan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Produk tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Produk"],
+        "summary": "Ubah produk",
+        "description": "Memperbarui seluruh atribut produk. Varian tidak diubah lewat endpoint ini.",
+        "operationId": "ubahProduk",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProdukInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Produk berhasil diperbarui.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsProduk"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Produk berhasil diperbarui",
+                  "data": {
+                    "id": 1,
+                    "nama": "Nasi Goreng Spesial",
+                    "harga": 27000,
+                    "kategori": "Makanan",
+                    "stok": 25,
+                    "tersedia": true,
+                    "deskripsi": "Nasi goreng dengan telur, ayam, dan kerupuk.",
+                    "bisa_pedas": true,
+                    "waktu_persiapan_menit": 15,
+                    "varian": []
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Produk tidak ditemukan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Produk tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "kategori": ["The selected kategori is invalid."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Produk"],
+        "summary": "Hapus produk",
+        "description": "Melakukan soft delete produk dan membersihkan item keranjang terkait. Produk yang masih dipakai pesanan aktif tidak boleh dihapus.",
+        "operationId": "hapusProduk",
+        "responses": {
+          "200": {
+            "description": "Produk berhasil dihapus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsId"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Produk berhasil dihapus",
+                  "data": {
+                    "id": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Produk tidak ditemukan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Produk tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Produk masih dipakai dalam pesanan aktif.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "409",
+                  "message": "Produk masih digunakan dalam pesanan aktif.",
+                  "data": {
+                    "alasan": "produk_dipakai_pesanan_aktif",
+                    "produk_id": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kategori": {
+      "get": {
+        "tags": ["Kategori"],
+        "summary": "Daftar kategori",
+        "description": "Mengambil kategori unik dari seluruh produk, diurutkan alfabetis.",
+        "operationId": "daftarKategori",
+        "responses": {
+          "200": {
+            "description": "Daftar kategori berhasil diambil.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsDaftarKategori"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Daftar kategori berhasil diambil",
+                  "data": ["Makanan", "Minuman", "Snack"]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/keranjang": {
+      "get": {
+        "tags": ["Keranjang"],
+        "summary": "Isi keranjang",
+        "description": "Mengambil item keranjang milik pelanggan beserta `jumlah_item` dan `ringkasan`. Bila `kurir_id` dikirim, server menghitung `ongkos_kirim` dan `total`.",
+        "operationId": "isiKeranjang",
+        "parameters": [
+          {
+            "name": "kurir_id",
+            "in": "query",
+            "required": false,
+            "description": "ID kurir aktif. Bila diisi, `ringkasan.ongkos_kirim` dan `ringkasan.total` tidak null.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Isi keranjang berhasil diambil. Keranjang kosong tetap 200 dengan `items: []`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsKeranjang"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Isi keranjang berhasil diambil",
+                  "data": {
+                    "items": [
+                      {
+                        "id": 12,
+                        "produk_id": 1,
+                        "nama": "Nasi Goreng Spesial",
+                        "varian": {
+                          "id": 2,
+                          "nama": "Jumbo",
+                          "tambahan_harga": 8000
+                        },
+                        "tingkat_pedas": "pedas",
+                        "catatan": "Tanpa bawang goreng",
+                        "harga_satuan": 33000,
+                        "jumlah": 2,
+                        "subtotal": 66000
+                      }
+                    ],
+                    "jumlah_item": 2,
+                    "ringkasan": {
+                      "subtotal": 66000,
+                      "ongkos_kirim": 10000,
+                      "total": 76000
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "description": "Kurir tidak valid atau tidak aktif.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "kurir_id": ["Kurir tidak ditemukan atau sedang tidak aktif."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Keranjang"],
+        "summary": "Tambah item keranjang",
+        "description": "Menambahkan item ke keranjang. Baris dengan kombinasi produk, varian, tingkat pedas, dan catatan yang identik akan digabung.",
+        "operationId": "tambahItemKeranjang",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["produk_id", "jumlah"],
+                "properties": {
+                  "produk_id": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "jumlah": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "example": 2
+                  },
+                  "varian_id": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Harus varian aktif milik produk yang dipilih.",
+                    "example": 2
+                  },
+                  "tingkat_pedas": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": ["tidak_pedas", "sedang", "pedas", "sangat_pedas"],
+                    "example": "pedas"
+                  },
+                  "catatan": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200,
+                    "example": "Tanpa bawang goreng"
+                  }
+                }
+              },
+              "example": {
+                "produk_id": 1,
+                "jumlah": 2,
+                "varian_id": 2,
+                "tingkat_pedas": "pedas",
+                "catatan": "Tanpa bawang goreng"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Item berhasil ditambahkan, baik sebagai baris baru maupun digabung.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsItemKeranjang"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "201",
+                  "message": "Item berhasil ditambahkan ke keranjang",
+                  "data": {
+                    "id": 12,
+                    "produk_id": 1,
+                    "nama": "Nasi Goreng Spesial",
+                    "varian": {
+                      "id": 2,
+                      "nama": "Jumbo",
+                      "tambahan_harga": 8000
+                    },
+                    "tingkat_pedas": "pedas",
+                    "catatan": "Tanpa bawang goreng",
+                    "harga_satuan": 33000,
+                    "jumlah": 2,
+                    "subtotal": 66000
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Stok kurang, produk tidak tersedia, atau batas jumlah item terlampaui.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "examples": {
+                  "stokKurang": {
+                    "summary": "Stok tidak mencukupi",
+                    "value": {
+                      "status": "gagal",
+                      "code": "409",
+                      "message": "Stok tidak mencukupi untuk 1 item",
+                      "data": {
+                        "alasan": "stok_kurang",
+                        "item_kurang": [
+                          {
+                            "produk_id": 6,
+                            "nama": "Rawon Daging",
+                            "diminta": 5,
+                            "tersedia": 3
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "produkTidakTersedia": {
+                    "summary": "Produk sedang tidak tersedia",
+                    "value": {
+                      "status": "gagal",
+                      "code": "409",
+                      "message": "Produk Rawon Daging sedang tidak tersedia.",
+                      "data": {
+                        "alasan": "produk_tidak_tersedia",
+                        "produk_id": 6,
+                        "nama": "Rawon Daging"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "jumlah": ["Jumlah item minimal 1."],
+                    "varian_id": ["Varian tidak valid untuk produk ini."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/keranjang/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID item keranjang.",
+          "schema": {
+            "type": "integer"
+          },
+          "example": 12
+        }
+      ],
+      "put": {
+        "tags": ["Keranjang"],
+        "summary": "Ubah jumlah item",
+        "description": "Mengubah jumlah item keranjang milik pelanggan. Jumlah akhir tidak boleh melebihi stok produk.",
+        "operationId": "ubahJumlahItemKeranjang",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["jumlah"],
+                "properties": {
+                  "jumlah": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "example": 3
+                  }
+                }
+              },
+              "example": {
+                "jumlah": 3
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Jumlah item berhasil diubah.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsItemKeranjang"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Jumlah item berhasil diubah",
+                  "data": {
+                    "id": 12,
+                    "produk_id": 1,
+                    "nama": "Nasi Goreng Spesial",
+                    "varian": {
+                      "id": 2,
+                      "nama": "Jumbo",
+                      "tambahan_harga": 8000
+                    },
+                    "tingkat_pedas": "pedas",
+                    "catatan": "Tanpa bawang goreng",
+                    "harga_satuan": 33000,
+                    "jumlah": 3,
+                    "subtotal": 99000
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Item keranjang tidak ditemukan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Item keranjang tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stok kurang atau produk tidak tersedia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "409",
+                  "message": "Stok tidak mencukupi untuk 1 item",
+                  "data": {
+                    "alasan": "stok_kurang",
+                    "item_kurang": [
+                      {
+                        "produk_id": 1,
+                        "nama": "Nasi Goreng Spesial",
+                        "diminta": 35,
+                        "tersedia": 30
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validasi gagal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "jumlah": ["Jumlah item minimal 1."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Keranjang"],
+        "summary": "Hapus item keranjang",
+        "operationId": "hapusItemKeranjang",
+        "responses": {
+          "200": {
+            "description": "Item keranjang berhasil dihapus.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsId"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Item keranjang berhasil dihapus",
+                  "data": {
+                    "id": 12
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Item keranjang tidak ditemukan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Item keranjang tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/kurir": {
+      "get": {
+        "tags": ["Kurir"],
+        "summary": "Daftar kurir",
+        "description": "Mengambil kurir aktif beserta wilayah dan tarif, diurutkan berdasarkan tarif lalu `id`.",
+        "operationId": "daftarKurir",
+        "responses": {
+          "200": {
+            "description": "Daftar kurir berhasil diambil.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsDaftarKurir"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Daftar kurir berhasil diambil",
+                  "data": [
+                    {
+                      "id": 1,
+                      "nama": "Kurir Hemat",
+                      "wilayah": "Malang Kota",
+                      "tarif": 8000,
+                      "aktif": true
+                    },
+                    {
+                      "id": 2,
+                      "nama": "Kurir Cepat",
+                      "wilayah": "Malang Kota",
+                      "tarif": 10000,
+                      "aktif": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/metode-pembayaran": {
+      "get": {
+        "tags": ["Metode Pembayaran"],
+        "summary": "Daftar metode pembayaran",
+        "description": "Mengambil metode pembayaran simulasi yang aktif, diurutkan berdasarkan `id`.",
+        "operationId": "daftarMetodePembayaran",
+        "responses": {
+          "200": {
+            "description": "Daftar metode pembayaran berhasil diambil.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsDaftarMetodePembayaran"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Daftar metode pembayaran berhasil diambil",
+                  "data": [
+                    {
+                      "id": 1,
+                      "kode": "transfer_manual",
+                      "nama": "Transfer Manual",
+                      "aktif": true
+                    },
+                    {
+                      "id": 2,
+                      "kode": "cod",
+                      "nama": "Bayar di Tempat (COD)",
+                      "aktif": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/checkout": {
+      "post": {
+        "tags": ["Checkout"],
+        "summary": "Buat pesanan",
+        "description": "Membuat pesanan dari isi keranjang secara atomik. Header `X-Kunci-Idempoten` wajib berisi UUID; permintaan ulang dengan kunci yang sama akan mengembalikan pesanan yang sama dengan status 201 (tanpa membuat pesanan ganda). Checkout juga ditolak bila toko sedang tutup.",
+        "operationId": "buatPesanan",
+        "parameters": [
+          {
+            "name": "X-Kunci-Idempoten",
+            "in": "header",
+            "required": true,
+            "description": "UUID unik per percobaan checkout. Gunakan UUID yang sama saat mengulang permintaan.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "example": "3f1c2a4e-8b7d-4c1a-9e2f-1a2b3c4d5e6f"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutInput"
+              },
+              "example": {
+                "nama_penerima": "Budi Santoso",
+                "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
+                "kurir_id": 2,
+                "metode_pembayaran": "transfer_manual"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pesanan berhasil dibuat, atau pesanan lama dikembalikan bila kunci idempoten sama.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsCheckout"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "201",
+                  "message": "Pesanan berhasil dibuat",
+                  "data": {
+                    "id": 7,
+                    "nomor_pesanan": "TKO1-20261104-0007",
+                    "status": "menunggu_pembayaran",
+                    "subtotal": 66000,
+                    "ongkos_kirim": 10000,
+                    "total": 76000,
+                    "metode_pembayaran": "transfer_manual"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "description": "Stok kurang, toko tutup, keranjang kosong, atau produk/varian sudah tidak tersedia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "examples": {
+                  "stokKurang": {
+                    "summary": "Stok tidak mencukupi",
+                    "value": {
+                      "status": "gagal",
+                      "code": "409",
+                      "message": "Stok tidak mencukupi untuk 1 item",
+                      "data": {
+                        "alasan": "stok_kurang",
+                        "item_kurang": [
+                          {
+                            "produk_id": 6,
+                            "nama": "Rawon Daging",
+                            "diminta": 5,
+                            "tersedia": 3
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "tokoTutup": {
+                    "summary": "Di luar jam buka",
+                    "value": {
+                      "status": "gagal",
+                      "code": "409",
+                      "message": "Toko sedang tutup. Pesanan hanya dapat dibuat pukul 08.00–21.00 WIB.",
+                      "data": {
+                        "alasan": "toko_tutup",
+                        "jam_buka": "08:00",
+                        "jam_tutup": "21:00"
+                      }
+                    }
+                  },
+                  "keranjangKosong": {
+                    "summary": "Keranjang kosong",
+                    "value": {
+                      "status": "gagal",
+                      "code": "409",
+                      "message": "Keranjang masih kosong.",
+                      "data": {
+                        "alasan": "keranjang_kosong"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Header atau body tidak valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "kunci_idempoten": ["Header X-Kunci-Idempoten wajib diisi."],
+                    "nama_penerima": ["Nama penerima wajib diisi."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pesanan": {
+      "get": {
+        "tags": ["Pesanan"],
+        "summary": "Riwayat pesanan",
+        "description": "Mengambil seluruh pesanan milik pelanggan, terbaru dahulu. Respons daftar tidak menyertakan `items`; gunakan endpoint rincian untuk item pesanan.",
+        "operationId": "riwayatPesanan",
+        "responses": {
+          "200": {
+            "description": "Riwayat pesanan berhasil diambil. Bila kosong tetap 200 dengan `data: []`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsDaftarPesanan"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Riwayat pesanan berhasil diambil",
+                  "data": [
+                    {
+                      "id": 7,
+                      "nomor_pesanan": "TKO1-20261104-0007",
+                      "pelanggan_id": 1,
+                      "kurir_id": 2,
+                      "metode_pembayaran_id": 1,
+                      "nama_penerima": "Budi Santoso",
+                      "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
+                      "subtotal": 66000,
+                      "ongkos_kirim": 10000,
+                      "total": 76000,
+                      "status": "menunggu_pembayaran",
+                      "metode_pembayaran": {
+                        "kode": "transfer_manual",
+                        "nama": "Transfer Manual"
+                      },
+                      "kurir": {
+                        "id": 2,
+                        "nama": "Kurir Cepat",
+                        "wilayah": "Malang Kota"
+                      },
+                      "created_at": "2026-11-04T10:15:30+07:00"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/pesanan/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID pesanan.",
+          "schema": {
+            "type": "integer"
+          },
+          "example": 7
+        }
+      ],
+      "get": {
+        "tags": ["Pesanan"],
+        "summary": "Rincian pesanan",
+        "description": "Mengambil rincian pesanan beserta item dan harga yang disalin saat pembelian.",
+        "operationId": "rincianPesanan",
+        "responses": {
+          "200": {
+            "description": "Rincian pesanan berhasil diambil.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsPesananDetail"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Rincian pesanan berhasil diambil",
+                  "data": {
+                    "id": 7,
+                    "nomor_pesanan": "TKO1-20261104-0007",
+                    "pelanggan_id": 1,
+                    "kurir_id": 2,
+                    "metode_pembayaran_id": 1,
+                    "nama_penerima": "Budi Santoso",
+                    "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
+                    "subtotal": 66000,
+                    "ongkos_kirim": 10000,
+                    "total": 76000,
+                    "status": "menunggu_pembayaran",
+                    "metode_pembayaran": {
+                      "kode": "transfer_manual",
+                      "nama": "Transfer Manual"
+                    },
+                    "kurir": {
+                      "id": 2,
+                      "nama": "Kurir Cepat",
+                      "wilayah": "Malang Kota"
+                    },
+                    "created_at": "2026-11-04T10:15:30+07:00",
+                    "items": [
+                      {
+                        "id": 15,
+                        "produk_id": 1,
+                        "nama_produk": "Nasi Goreng Spesial",
+                        "varian_nama": "Jumbo",
+                        "harga_dasar": 25000,
+                        "tambahan_harga": 8000,
+                        "harga_satuan": 33000,
+                        "jumlah": 2,
+                        "subtotal": 66000,
+                        "tingkat_pedas": "pedas",
+                        "catatan": "Tanpa bawang goreng"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Pesanan tidak ditemukan atau bukan milik pelanggan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Pesanan tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pesanan/{id}/status": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID pesanan.",
+          "schema": {
+            "type": "integer"
+          },
+          "example": 7
+        }
+      ],
+      "patch": {
+        "tags": ["Pesanan"],
+        "summary": "Ubah status pesanan",
+        "description": "Hanya transisi yang sah yang diizinkan: `menunggu_pembayaran` -> `menunggu_konfirmasi`/`dibatalkan`, `menunggu_konfirmasi` -> `dibayar`/`dibatalkan`, `dibayar` -> `diproses`, `diproses` -> `dikirim`, `dikirim` -> `selesai`. Status `selesai` dan `dibatalkan` bersifat final. Pembatalan mengembalikan stok produk.",
+        "operationId": "ubahStatusPesanan",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["menunggu_pembayaran", "menunggu_konfirmasi", "dibayar", "diproses", "dikirim", "selesai", "dibatalkan"],
+                    "example": "menunggu_konfirmasi"
+                  }
+                }
+              },
+              "example": {
+                "status": "menunggu_konfirmasi"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status pesanan berhasil diperbarui.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsPesananDetail"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Status pesanan berhasil diperbarui",
+                  "data": {
+                    "id": 7,
+                    "nomor_pesanan": "TKO1-20261104-0007",
+                    "pelanggan_id": 1,
+                    "kurir_id": 2,
+                    "metode_pembayaran_id": 1,
+                    "nama_penerima": "Budi Santoso",
+                    "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
+                    "subtotal": 66000,
+                    "ongkos_kirim": 10000,
+                    "total": 76000,
+                    "status": "menunggu_konfirmasi",
+                    "metode_pembayaran": {
+                      "kode": "transfer_manual",
+                      "nama": "Transfer Manual"
+                    },
+                    "kurir": {
+                      "id": 2,
+                      "nama": "Kurir Cepat",
+                      "wilayah": "Malang Kota"
+                    },
+                    "created_at": "2026-11-04T10:15:30+07:00",
+                    "items": [
+                      {
+                        "id": 15,
+                        "produk_id": 1,
+                        "nama_produk": "Nasi Goreng Spesial",
+                        "varian_nama": "Jumbo",
+                        "harga_dasar": 25000,
+                        "tambahan_harga": 8000,
+                        "harga_satuan": 33000,
+                        "jumlah": 2,
+                        "subtotal": 66000,
+                        "tingkat_pedas": "pedas",
+                        "catatan": "Tanpa bawang goreng"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Pesanan tidak ditemukan atau bukan milik pelanggan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Pesanan tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Transisi status tidak sah.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "409",
+                  "message": "Perubahan status pesanan tidak diizinkan.",
+                  "data": {
+                    "status_sekarang": "menunggu_pembayaran",
+                    "status_diminta": "dikirim"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Nilai status tidak dikenal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsValidasiGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Data yang dikirim tidak lengkap",
+                  "data": null,
+                  "errors": {
+                    "status": ["The selected status is invalid."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Token pelanggan statis",
+        "description": "Masukkan token pelanggan tanpa awalan `Bearer`. Nilai token berasal dari seeder/deploy."
+      }
+    },
+    "schemas": {
+      "VarianProduk": {
+        "type": "object",
+        "required": ["id", "nama", "tambahan_harga"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 2
+          },
+          "nama": {
+            "type": "string",
+            "example": "Jumbo"
+          },
+          "tambahan_harga": {
+            "type": "integer",
+            "example": 8000
+          }
+        }
+      },
+      "Produk": {
+        "type": "object",
+        "required": ["id", "nama", "harga", "kategori", "stok", "tersedia", "deskripsi", "bisa_pedas", "waktu_persiapan_menit", "varian"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nama": {
+            "type": "string",
+            "example": "Nasi Goreng Spesial"
+          },
+          "harga": {
+            "type": "integer",
+            "description": "Harga dasar dalam rupiah.",
+            "example": 25000
+          },
+          "kategori": {
+            "type": "string",
+            "enum": ["Makanan", "Minuman", "Snack"],
+            "example": "Makanan"
+          },
+          "stok": {
+            "type": "integer",
+            "example": 30
+          },
+          "tersedia": {
+            "type": "boolean",
+            "example": true
+          },
+          "deskripsi": {
+            "type": "string",
+            "nullable": true,
+            "example": "Nasi goreng dengan telur, ayam, dan kerupuk."
+          },
+          "bisa_pedas": {
+            "type": "boolean",
+            "example": true
+          },
+          "waktu_persiapan_menit": {
+            "type": "integer",
+            "example": 15
+          },
+          "varian": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VarianProduk"
+            }
+          }
+        }
+      },
+      "ProdukInput": {
+        "type": "object",
+        "required": ["nama", "harga", "kategori", "stok", "tersedia", "bisa_pedas", "waktu_persiapan_menit"],
+        "properties": {
+          "nama": {
+            "type": "string",
+            "maxLength": 150,
+            "example": "Nasi Goreng Spesial"
+          },
+          "harga": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967295,
+            "example": 25000
+          },
+          "kategori": {
+            "type": "string",
+            "enum": ["Makanan", "Minuman", "Snack"],
+            "example": "Makanan"
+          },
+          "stok": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4294967295,
+            "example": 30
+          },
+          "tersedia": {
+            "type": "boolean",
+            "example": true
+          },
+          "deskripsi": {
+            "type": "string",
+            "nullable": true,
+            "example": "Nasi goreng dengan telur, ayam, dan kerupuk."
+          },
+          "bisa_pedas": {
+            "type": "boolean",
+            "example": true
+          },
+          "waktu_persiapan_menit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535,
+            "example": 15
+          }
+        }
+      },
+      "Kurir": {
+        "type": "object",
+        "required": ["id", "nama", "wilayah", "tarif", "aktif"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 2
+          },
+          "nama": {
+            "type": "string",
+            "example": "Kurir Cepat"
+          },
+          "wilayah": {
+            "type": "string",
+            "example": "Malang Kota"
+          },
+          "tarif": {
+            "type": "integer",
+            "example": 10000
+          },
+          "aktif": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "MetodePembayaran": {
+        "type": "object",
+        "required": ["id", "kode", "nama", "aktif"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "kode": {
+            "type": "string",
+            "example": "transfer_manual"
+          },
+          "nama": {
+            "type": "string",
+            "example": "Transfer Manual"
+          },
+          "aktif": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "ItemKeranjang": {
+        "type": "object",
+        "required": ["id", "produk_id", "nama", "varian", "tingkat_pedas", "catatan", "harga_satuan", "jumlah", "subtotal"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 12
+          },
+          "produk_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nama": {
+            "type": "string",
+            "example": "Nasi Goreng Spesial"
+          },
+          "varian": {
+            "type": "object",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VarianProduk"
+              }
+            ]
+          },
+          "tingkat_pedas": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["tidak_pedas", "sedang", "pedas", "sangat_pedas", null],
+            "example": "pedas"
+          },
+          "catatan": {
+            "type": "string",
+            "nullable": true,
+            "example": "Tanpa bawang goreng"
+          },
+          "harga_satuan": {
+            "type": "integer",
+            "example": 33000
+          },
+          "jumlah": {
+            "type": "integer",
+            "example": 2
+          },
+          "subtotal": {
+            "type": "integer",
+            "example": 66000
+          }
+        }
+      },
+      "RingkasanKeranjang": {
+        "type": "object",
+        "required": ["subtotal", "ongkos_kirim", "total"],
+        "properties": {
+          "subtotal": {
+            "type": "integer",
+            "example": 66000
+          },
+          "ongkos_kirim": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null bila query `kurir_id` tidak dikirim.",
+            "example": 10000
+          },
+          "total": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null bila query `kurir_id` tidak dikirim.",
+            "example": 76000
+          }
+        }
+      },
+      "Keranjang": {
+        "type": "object",
+        "required": ["items", "jumlah_item", "ringkasan"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemKeranjang"
+            }
+          },
+          "jumlah_item": {
+            "type": "integer",
+            "example": 2
+          },
+          "ringkasan": {
+            "$ref": "#/components/schemas/RingkasanKeranjang"
+          }
+        }
+      },
+      "CheckoutInput": {
+        "type": "object",
+        "required": ["nama_penerima", "alamat_penerima", "kurir_id", "metode_pembayaran"],
+        "properties": {
+          "nama_penerima": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "Budi Santoso"
+          },
+          "alamat_penerima": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "Jl. Soepraoen No. 10, Malang"
+          },
+          "kurir_id": {
+            "type": "integer",
+            "description": "ID kurir aktif.",
+            "example": 2
+          },
+          "metode_pembayaran": {
+            "type": "string",
+            "description": "Kode metode pembayaran aktif.",
+            "example": "transfer_manual"
+          }
+        }
+      },
+      "CheckoutHasil": {
+        "type": "object",
+        "required": ["id", "nomor_pesanan", "status", "subtotal", "ongkos_kirim", "total", "metode_pembayaran"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 7
+          },
+          "nomor_pesanan": {
+            "type": "string",
+            "example": "TKO1-20261104-0007"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["menunggu_pembayaran", "menunggu_konfirmasi", "dibayar", "diproses", "dikirim", "selesai", "dibatalkan"],
+            "example": "menunggu_pembayaran"
+          },
+          "subtotal": {
+            "type": "integer",
+            "example": 66000
+          },
+          "ongkos_kirim": {
+            "type": "integer",
+            "example": 10000
+          },
+          "total": {
+            "type": "integer",
+            "example": 76000
+          },
+          "metode_pembayaran": {
+            "type": "string",
+            "example": "transfer_manual"
+          }
+        }
+      },
+      "ItemPesanan": {
+        "type": "object",
+        "required": ["id", "produk_id", "nama_produk", "varian_nama", "harga_dasar", "tambahan_harga", "harga_satuan", "jumlah", "subtotal", "tingkat_pedas", "catatan"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 15
+          },
+          "produk_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nama_produk": {
+            "type": "string",
+            "description": "Nama produk yang disalin saat checkout.",
+            "example": "Nasi Goreng Spesial"
+          },
+          "varian_nama": {
+            "type": "string",
+            "nullable": true,
+            "example": "Jumbo"
+          },
+          "harga_dasar": {
+            "type": "integer",
+            "example": 25000
+          },
+          "tambahan_harga": {
+            "type": "integer",
+            "example": 8000
+          },
+          "harga_satuan": {
+            "type": "integer",
+            "example": 33000
+          },
+          "jumlah": {
+            "type": "integer",
+            "example": 2
+          },
+          "subtotal": {
+            "type": "integer",
+            "example": 66000
+          },
+          "tingkat_pedas": {
+            "type": "string",
+            "nullable": true,
+            "example": "pedas"
+          },
+          "catatan": {
+            "type": "string",
+            "nullable": true,
+            "example": "Tanpa bawang goreng"
+          }
+        }
+      },
+      "Pesanan": {
+        "type": "object",
+        "required": ["id", "nomor_pesanan", "pelanggan_id", "kurir_id", "metode_pembayaran_id", "nama_penerima", "alamat_penerima", "subtotal", "ongkos_kirim", "total", "status", "metode_pembayaran", "kurir", "created_at"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 7
+          },
+          "nomor_pesanan": {
+            "type": "string",
+            "example": "TKO1-20261104-0007"
+          },
+          "pelanggan_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "kurir_id": {
+            "type": "integer",
+            "example": 2
+          },
+          "metode_pembayaran_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nama_penerima": {
+            "type": "string",
+            "example": "Budi Santoso"
+          },
+          "alamat_penerima": {
+            "type": "string",
+            "example": "Jl. Soepraoen No. 10, Malang"
+          },
+          "subtotal": {
+            "type": "integer",
+            "example": 66000
+          },
+          "ongkos_kirim": {
+            "type": "integer",
+            "example": 10000
+          },
+          "total": {
+            "type": "integer",
+            "example": 76000
+          },
+          "status": {
+            "type": "string",
+            "enum": ["menunggu_pembayaran", "menunggu_konfirmasi", "dibayar", "diproses", "dikirim", "selesai", "dibatalkan"],
+            "example": "menunggu_pembayaran"
+          },
+          "metode_pembayaran": {
+            "type": "object",
+            "properties": {
+              "kode": {
+                "type": "string",
+                "nullable": true,
+                "example": "transfer_manual"
+              },
+              "nama": {
+                "type": "string",
+                "nullable": true,
+                "example": "Transfer Manual"
+              }
+            }
+          },
+          "kurir": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "nullable": true,
+                "example": 2
+              },
+              "nama": {
+                "type": "string",
+                "nullable": true,
+                "example": "Kurir Cepat"
+              },
+              "wilayah": {
+                "type": "string",
+                "nullable": true,
+                "example": "Malang Kota"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-11-04T10:15:30+07:00"
+          }
+        }
+      },
+      "PesananDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Pesanan"
+          },
+          {
+            "type": "object",
+            "required": ["items"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ItemPesanan"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsSukses": {
+        "type": "object",
+        "required": ["status", "code", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["sukses"]
+          },
+          "code": {
+            "type": "string",
+            "description": "Kode status dalam bentuk string.",
+            "example": "200"
+          },
+          "message": {
+            "type": "string",
+            "example": "Daftar produk berhasil diambil"
+          }
+        }
+      },
+      "ResponsGagal": {
+        "type": "object",
+        "required": ["status", "code", "message", "data"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["gagal"]
+          },
+          "code": {
+            "type": "string",
+            "description": "Kode status dalam bentuk string.",
+            "example": "404"
+          },
+          "message": {
+            "type": "string",
+            "example": "Produk tidak ditemukan."
+          },
+          "data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "example": null
+          },
+          "errors": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ResponsValidasiGagal": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsGagal"
+          },
+          {
+            "type": "object",
+            "required": ["errors"],
+            "properties": {
+              "errors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsDaftarProduk": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Produk"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsProduk": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Produk"
+              }
+            }
+          }
+        ]
+      },
+      "ResponsDaftarKategori": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": ["Makanan", "Minuman", "Snack"]
+              }
+            }
+          }
+        ]
+      },
+      "ResponsDaftarKurir": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Kurir"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsDaftarMetodePembayaran": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MetodePembayaran"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsKeranjang": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Keranjang"
+              }
+            }
+          }
+        ]
+      },
+      "ResponsItemKeranjang": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ItemKeranjang"
+              }
+            }
+          }
+        ]
+      },
+      "ResponsId": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "example": 1
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsCheckout": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/CheckoutHasil"
+              }
+            }
+          }
+        ]
+      },
+      "ResponsDaftarPesanan": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Pesanan"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ResponsPesananDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/PesananDetail"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Token pelanggan tidak dikirim atau tidak valid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ResponsGagal"
+            },
+            "example": {
+              "status": "gagal",
+              "code": "401",
+              "message": "Akses ditolak. Token pelanggan tidak valid.",
+              "data": null
+            }
+          }
+        }
+      }
+    }
+  }
+}

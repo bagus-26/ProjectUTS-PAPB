@@ -114,7 +114,16 @@ Daftar berikut adalah kontrak dalam PRD Bagian 6; endpoint yang terdaftar sudah 
 | GET | `/api/kategori` | Daftar kategori untuk filter | A1 |
 | GET | `/api/metode-pembayaran` | Daftar metode pembayaran simulasi | A3 |
 
-Dokumentasi endpoint API dalam format PDF tersedia di [`docs/PAPB-UTS_Kelompok-01_Makanan.pdf`](docs/PAPB-UTS_Kelompok-01_Makanan.pdf) (10 halaman: ERD, tabel endpoint, contoh request/response nyata, perhitungan, aturan bisnis, idempotensi, dan transisi status). Ekspor Postman belum dibuat.
+Dokumentasi endpoint API dalam format PDF tersedia di [`docs/PAPB-UTS_Kelompok-01_Makanan.pdf`](docs/PAPB-UTS_Kelompok-01_Makanan.pdf) (10 halaman: ERD, tabel endpoint, contoh request/response nyata, perhitungan, aturan bisnis, idempotensi, dan transisi status).
+
+### Dokumentasi API (Swagger UI)
+
+Dokumentasi interaktif 16 endpoint tersedia lewat Swagger UI dengan Base URL `http://127.0.0.1:8000/api`.
+
+1. Jalankan backend: `cd backend` lalu `php artisan serve`.
+2. Buka `http://127.0.0.1:8000/api`.
+3. Klik **Authorize**, isi token pelanggan tanpa awalan `Bearer`, lalu gunakan **Try it out** pada endpoint yang ingin dicoba.
+4. Spesifikasi OpenAPI 3.0 dapat diakses di `http://127.0.0.1:8000/api/openapi.json` (sumber: `backend/resources/openapi/openapi.json`).
 
 ### Panel Admin
 
