@@ -776,61 +776,73 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'TOTAL TAGIHAN',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: TemaWarna.teksSekunder,
-                      ),
-                    ),
-                    Text(
-                      ringkasan?.total == null
-                          ? '—'
-                          : formatRupiah(ringkasan!.total!),
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: TemaWarna.teksUtama,
-                      ),
-                    ),
-                  ],
+            if (_daftarMetode.isNotEmpty) ...[
+              const Text(
+                'METODE PEMBAYARAN',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: TemaWarna.teksSekunder,
                 ),
-                if (_daftarMetode.isNotEmpty)
-                  DropdownButton<String>(
-                    value: _daftarMetode
-                            .any((metode) => metode.kode == _metodeTerpilih)
-                        ? _metodeTerpilih
-                        : _daftarMetode.first.kode,
-                    underline: const SizedBox(),
-                    items: [
-                      for (final metode in _daftarMetode)
-                        DropdownMenuItem(
-                          value: metode.kode,
-                          child: Text(
-                            metode.nama,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+              ),
+              DropdownButton<String>(
+                isExpanded: true,
+                itemHeight: null,
+                value: _daftarMetode
+                        .any((metode) => metode.kode == _metodeTerpilih)
+                    ? _metodeTerpilih
+                    : _daftarMetode.first.kode,
+                underline: const SizedBox(),
+                items: [
+                  for (final metode in _daftarMetode)
+                    DropdownMenuItem<String>(
+                      value: metode.kode,
+                      child: Text(
+                        metode.nama,
+                        maxLines: 2,
+                        softWrap: true,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
-                    ],
-                    onChanged: mati
-                        ? null
-                        : (nilai) {
-                            if (nilai != null) {
-                              setState(() => _metodeTerpilih = nilai);
-                            }
-                          },
+                      ),
+                    ),
+                ],
+                onChanged: mati
+                    ? null
+                    : (nilai) {
+                        if (nilai != null) {
+                          setState(() => _metodeTerpilih = nilai);
+                        }
+                      },
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'TOTAL TAGIHAN',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: TemaWarna.teksSekunder,
+                    ),
                   ),
+                ),
+                Text(
+                  ringkasan?.total == null
+                      ? '—'
+                      : formatRupiah(ringkasan!.total!),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: TemaWarna.teksUtama,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -855,23 +867,29 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: tebal ? FontWeight.w700 : FontWeight.w400,
-              color: tebal ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: tebal ? FontWeight.w700 : FontWeight.w400,
+                color: tebal ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
+              ),
             ),
           ),
-          Text(
-            nilai,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
-              color: warnaNilai ??
-                  (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              nilai,
+              textAlign: TextAlign.right,
+              softWrap: true,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
+                color: warnaNilai ??
+                    (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
+              ),
             ),
           ),
         ],

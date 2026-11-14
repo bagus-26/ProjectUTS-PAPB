@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
@@ -20,8 +21,10 @@ import 'halaman_utama.dart';
 /// Halaman Rincian Pesanan (`HalamanRincianPesanan` pada PRD 7.1).
 ///
 /// * `GET /pesanan/{id}` — nomor, status, item + harga saat beli, total, metode.
-/// * `PATCH /pesanan/{id}/status` — tombol **Bayar (simulasi)** mengirim
-///   `menunggu_konfirmasi`; tombol terima mengirim `selesai` (PRD Bagian 6.7).
+/// * `PATCH /pesanan/{id}/status` — tombol terima mengirim `selesai`
+///   (PRD Bagian 6.7); tombol **Batalkan Pesanan** mengirim `dibatalkan`
+///   (stok dikembalikan dan invoice Xendit yang belum dibayar dimatikan oleh
+///   server).
 /// * Setelah aksi final → Katalog dengan tumpukan dibersihkan
 ///   (`pushAndRemoveUntil`).
 class HalamanDetailPesanan extends StatefulWidget {
@@ -42,6 +45,7 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
   GalatApi? _galat;
 
   bool _sedangMengirim = false;
+  bool _sedangMenyiapkanPembayaran = false;
   Timer? _timerPembaruan;
 
   @override
@@ -71,6 +75,7 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
       // Abaikan galat polling agar tidak mengganggu UI.
     }
   }
+
   Future<void> _muatRincian() async {
     setState(() {
       _keadaan = KeadaanMuat.memuat;
@@ -129,8 +134,87 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
     }
   }
 
-  /// Bayar simulasi: `menunggu_pembayaran` → `menunggu_konfirmasi` (A5-04).
-  void _bayarSimulasi() => _ubahStatus('menunggu_konfirmasi');
+  /// Membatalkan pesanan setelah pelanggan menyetujui dialog konfirmasi.
+  /// Server mengembalikan stok dan mengedaluwarsakan invoice Xendit.
+  Future<void> _batalkanPesanan() async {
+    final pesanan = _pesanan;
+    if (pesanan == null || _sedangMengirim) return;
+
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Batalkan Pesanan?'),
+        content: const Text(
+          'Pesanan ini akan dibatalkan dan stok menu dikembalikan ke toko. '
+          'Tautan pembayaran yang belum dibayar juga tidak akan berlaku lagi.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Kembali'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: TemaWarna.merahHabis),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Ya, Batalkan'),
+          ),
+        ],
+      ),
+    );
+
+    if (setuju != true || !mounted) return;
+
+    await _ubahStatus('dibatalkan');
+
+    if (!mounted || _pesanan?.status != 'dibatalkan') return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pesanan berhasil dibatalkan.')),
+    );
+  }
+
+  /// Membuka halaman pembayaran Xendit di browser. Bila tautan belum ada
+  /// atau sudah kedaluwarsa, server diminta membuat invoice baru lebih dulu.
+  Future<void> _bayarXendit() async {
+    final pesanan = _pesanan;
+    if (pesanan == null || _sedangMenyiapkanPembayaran) return;
+
+    setState(() => _sedangMenyiapkanPembayaran = true);
+
+    try {
+      var tautan = pesanan.pembayaran?.invoiceUrl;
+
+      if (tautan == null || tautan.isEmpty) {
+        final pembayaran = await _layanan.buatPembayaran(pesanan.id);
+        tautan = pembayaran.invoiceUrl;
+      }
+
+      if (tautan == null || tautan.isEmpty) {
+        throw GalatApi.umum('Tautan pembayaran tidak tersedia.');
+      }
+
+      final dibuka = await launchUrl(
+        Uri.parse(tautan),
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!dibuka && mounted) {
+        throw GalatApi.umum('Halaman pembayaran tidak dapat dibuka.');
+      }
+    } on GalatApi catch (g) {
+      if (mounted) tampilkanGalat(context, g);
+    } catch (_) {
+      if (mounted) {
+        tampilkanGalat(
+          context,
+          GalatApi.umum('Halaman pembayaran tidak dapat dibuka.'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sedangMenyiapkanPembayaran = false);
+    }
+  }
 
   void _konfirmasiDiterima() => _ubahStatus('selesai');
 
@@ -174,8 +258,11 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 color: TemaWarna.cokelatUtama,
                 shape: BoxShape.circle,
               ),
-              child:
-                  const Icon(Icons.check_rounded, color: Colors.white, size: 36),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 36,
+              ),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -274,16 +361,14 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
         return const TampilanMuat(pesan: 'Memuat rincian pesanan...');
 
       case KeadaanMuat.galat:
-        return TampilanGalat(
-          galat: _galat,
-          saatCobaLagi: _muatRincian,
-        );
+        return TampilanGalat(galat: _galat, saatCobaLagi: _muatRincian);
 
       case KeadaanMuat.kosong:
         return TampilanKosong(
           ikon: Icons.receipt_long_outlined,
           judul: 'Pesanan Tidak Ditemukan',
-          pesan: _galat?.pesan ??
+          pesan:
+              _galat?.pesan ??
               'Pesanan yang kamu cari tidak ada atau sudah dihapus.',
           teksAksi: 'Lihat Riwayat Pesanan',
           saatAksiDitekan: _keRiwayat,
@@ -346,7 +431,12 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                   children: [
                     for (var i = 0; i < 4; i++)
                       _StepItem(
-                        label: const ['Dibuat', 'Diracik', 'Dikirim', 'Selesai'][i],
+                        label: const [
+                          'Dibuat',
+                          'Diracik',
+                          'Dikirim',
+                          'Selesai',
+                        ][i],
                         selesai: i < langkah || pesanan.status == 'selesai',
                         aktif: i == langkah && pesanan.status != 'selesai',
                       ),
@@ -495,8 +585,10 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                   ),
                 ),
               const Divider(height: 20),
-              _barisTotal('Metode Pembayaran',
-                  pesanan.namaMetode ?? pesanan.kodeMetode),
+              _barisTotal(
+                'Metode Pembayaran',
+                pesanan.namaMetode ?? pesanan.kodeMetode,
+              ),
               if (pesanan.ongkosKirim != null)
                 _barisTotal('Ongkos Kirim', formatRupiah(pesanan.ongkosKirim!)),
               _barisTotal(
@@ -515,22 +607,30 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: tebal ? FontWeight.w700 : FontWeight.w400,
-              color: tebal ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: tebal ? FontWeight.w700 : FontWeight.w400,
+                color: tebal ? TemaWarna.teksUtama : TemaWarna.teksSekunder,
+              ),
             ),
           ),
-          Text(
-            nilai,
-            style: TextStyle(
-              fontSize: tebal ? 15 : 13,
-              fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
-              color: tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama,
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 3,
+            child: Text(
+              nilai,
+              textAlign: TextAlign.right,
+              softWrap: true,
+              style: TextStyle(
+                fontSize: tebal ? 15 : 13,
+                fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
+                color: tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama,
+              ),
             ),
           ),
         ],
@@ -542,10 +642,9 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
     final (warna, teks) = switch (status) {
       'selesai' => (Colors.green.shade50, '● Selesai'),
       'dibatalkan' => (Colors.red.shade50, '● Dibatalkan'),
-      'dibayar' || 'diproses' || 'dikirim' => (
-          Colors.green.shade50,
-          '● ${_judulStatus(status)}',
-        ),
+      'dibayar' ||
+      'diproses' ||
+      'dikirim' => (Colors.green.shade50, '● ${_judulStatus(status)}'),
       _ => (Colors.orange.shade50, '● ${_judulStatus(status)}'),
     };
 
@@ -594,7 +693,7 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
 
   String _pesanStatus(String status) => switch (status) {
     'menunggu_pembayaran' =>
-      'Selesaikan pembayaran simulasi agar pesanan segera diproses.',
+      'Selesaikan pembayaran di halaman aman Xendit, lalu kembali ke aplikasi.',
     'menunggu_konfirmasi' => 'Pembayaran sedang diverifikasi oleh toko.',
     'dibayar' => 'Pembayaran diterima, pesanan segera diracik.',
     'diproses' => 'Pesanan sedang disiapkan di dapur toko.',
@@ -608,9 +707,14 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
     final pesanan = _pesanan;
     if (pesanan == null) return const SizedBox.shrink();
 
+    final bool sedangProses = _sedangMengirim || _sedangMenyiapkanPembayaran;
     final bool bisaBayar =
-        pesanan.status == 'menunggu_pembayaran' && !_sedangMengirim;
-    final bool bisaTerima = pesanan.status == 'dikirim' && !_sedangMengirim;
+        pesanan.status == 'menunggu_pembayaran' && !sedangProses;
+    final bool bisaTerima = pesanan.status == 'dikirim' && !sedangProses;
+    // Pelanggan hanya boleh membatalkan pesanan yang belum dibayar. Setelah
+    // pembayaran masuk (`menunggu_konfirmasi`), pembatalan ditangani admin
+    // lewat panel agar pengembalian dana tidak terlewat.
+    final bool bisaBatal = pesanan.status == 'menunggu_pembayaran';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
@@ -621,10 +725,10 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
           children: [
             if (bisaBayar)
               TombolUtama(
-                teks: 'Bayar (Simulasi) • ${formatRupiah(pesanan.total)}',
+                teks: 'Bayar Sekarang • ${formatRupiah(pesanan.total)}',
                 warnaLatar: TemaWarna.cokelatUtama,
-                sedangMemuat: _sedangMengirim,
-                onPressed: _bayarSimulasi,
+                sedangMemuat: _sedangMenyiapkanPembayaran,
+                onPressed: _bayarXendit,
               )
             else if (bisaTerima)
               TombolUtama(
@@ -646,6 +750,29 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 warnaLatar: TemaWarna.cokelatMuda,
                 onPressed: null,
               ),
+            if (bisaBatal) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 48,
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: sedangProses ? null : _batalkanPesanan,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text('Batalkan Pesanan'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: TemaWarna.merahHabis,
+                    side: const BorderSide(color: TemaWarna.merahHabis),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

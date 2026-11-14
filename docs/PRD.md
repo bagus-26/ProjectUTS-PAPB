@@ -176,7 +176,7 @@ erDiagram
 | `pesanan` | `id`, `nomor_pesanan` (unik, mis. `TKO1-20261104-0007`), `pelanggan_id`, `kurir_id`, `metode_pembayaran_id`, `nama_penerima`, `alamat_penerima`, `subtotal`, `ongkos_kirim`, `total`, `status`, `kunci_idempoten`, timestamps | **Unik** (`pelanggan_id`, `kunci_idempoten`) |
 | `detail_pesanan` | `id`, `pesanan_id`, `produk_id`, `nama_produk`, `varian_nama`, `harga_dasar`, `tambahan_harga`, `harga_satuan`, `jumlah`, `subtotal`, `tingkat_pedas`, `catatan` | **Snapshot** saat pembelian |
 | `kurir` | `id`, `nama`, `wilayah`, `tarif`, `aktif` | Minimal 3 baris dengan tarif berbeda |
-| `metode_pembayaran` | `id`, `kode` (`tunai_di_tempat`, `transfer_manual`), `nama`, `aktif` | |
+| `metode_pembayaran` | `id`, `kode` (`xendit_qris`, `xendit_ewallet`, `xendit_va`, `xendit_kartu`), `nama`, `aktif` | Hanya kanal Xendit aktif |
 | `toko` | `id`, `nama`, `jam_buka`, `jam_tutup` | Satu baris |
 | `pelanggan` | `id`, `nama`, `token` | Dua baris (D-02) |
 
@@ -275,7 +275,7 @@ POST /api/checkout
 X-Kunci-Idempoten: 3f1c...(uuid)
 Authorization: Bearer <token pelanggan>
 { "nama_penerima": "Budi Santoso", "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
-  "kurir_id": 2, "metode_pembayaran": "transfer_manual" }
+  "kurir_id": 2, "metode_pembayaran": "xendit_qris" }
 ```
 Langkah server (urutan ini **wajib**):
 1. Middleware token → `pelanggan_id`.
@@ -299,7 +299,7 @@ Balasan 201:
 { "status": "sukses", "code": "201", "message": "Pesanan berhasil dibuat",
   "data": { "id": 7, "nomor_pesanan": "TKO1-20261104-0007", "status": "menunggu_pembayaran",
             "subtotal": 66000, "ongkos_kirim": 10000, "total": 76000,
-            "metode_pembayaran": "transfer_manual" } }
+            "metode_pembayaran": "xendit_qris" } }
 ```
 
 ### 6.7 Status pesanan
@@ -735,7 +735,7 @@ Pertemuan 8 meminta **3 menit demonstrasi satu alur yang diundi penguji**, jadi 
 
 **Pelanggan**: (1) Pelanggan Uji 1, token `kelompok1-token-statis`. (2) Pelanggan Uji 2, token `kelompok1-token-statis-2`.
 **Toko**: "Warung Kelompok 1", `jam_buka 08:00`, `jam_tutup 21:00`.
-**Metode pembayaran**: `tunai_di_tempat`, `transfer_manual`.
+**Metode pembayaran**: `xendit_qris`, `xendit_ewallet`, `xendit_va`, `xendit_kartu`.
 **Kurir**:
 
 | # | Nama | Wilayah | Tarif |
@@ -766,8 +766,8 @@ Pertemuan 8 meminta **3 menit demonstrasi satu alur yang diundi penguji**, jadi 
 **Varian porsi**: semua Makanan punya *Reguler (+0)* dan *Jumbo (+8.000)*; semua Minuman punya *Reguler (+0)* dan *Large (+3.000)*.
 
 **Tiga pesanan contoh** (status berbeda, untuk pelanggan 1):
-1. `menunggu_pembayaran`: Nasi Goreng Jumbo ×2 + Es Teh ×2 → subtotal 76.000 + ongkir 5.000 (kurir 1) = **81.000**, `transfer_manual`.
-2. `dibayar`: Bakso Malang Reguler ×1 + Es Jeruk ×1, `tunai_di_tempat`.
+1. `menunggu_pembayaran`: Nasi Goreng Jumbo ×2 + Es Teh ×2 → subtotal 76.000 + ongkir 5.000 (kurir 1) = **81.000**, `xendit_qris`.
+2. `dibayar`: Bakso Malang Reguler ×1 + Es Jeruk ×1, `xendit_ewallet`.
 3. `selesai`: Kopi Susu Gula Aren ×2 dengan `harga_satuan` **14.000** (harga produk kini 15.000), untuk memperagakan snapshot harga.
 
 ---

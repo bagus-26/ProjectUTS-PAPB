@@ -942,14 +942,26 @@
                   "data": [
                     {
                       "id": 1,
-                      "kode": "transfer_manual",
-                      "nama": "Transfer Manual",
+                      "kode": "xendit_qris",
+                      "nama": "QRIS (GoPay, OVO, DANA, ShopeePay)",
                       "aktif": true
                     },
                     {
                       "id": 2,
-                      "kode": "cod",
-                      "nama": "Bayar di Tempat (COD)",
+                      "kode": "xendit_ewallet",
+                      "nama": "E-Wallet (OVO, DANA, ShopeePay, LinkAja)",
+                      "aktif": true
+                    },
+                    {
+                      "id": 3,
+                      "kode": "xendit_va",
+                      "nama": "Virtual Account Bank",
+                      "aktif": true
+                    },
+                    {
+                      "id": 4,
+                      "kode": "xendit_kartu",
+                      "nama": "Kartu Kredit / Debit",
                       "aktif": true
                     }
                   ]
@@ -993,7 +1005,7 @@
                 "nama_penerima": "Budi Santoso",
                 "alamat_penerima": "Jl. Soepraoen No. 10, Malang",
                 "kurir_id": 2,
-                "metode_pembayaran": "transfer_manual"
+                "metode_pembayaran": "xendit_qris"
               }
             }
           }
@@ -1017,7 +1029,7 @@
                     "subtotal": 66000,
                     "ongkos_kirim": 10000,
                     "total": 76000,
-                    "metode_pembayaran": "transfer_manual"
+                    "metode_pembayaran": "xendit_qris"
                   }
                 }
               }
@@ -1136,8 +1148,8 @@
                       "total": 76000,
                       "status": "menunggu_pembayaran",
                       "metode_pembayaran": {
-                        "kode": "transfer_manual",
-                        "nama": "Transfer Manual"
+                        "kode": "xendit_qris",
+                        "nama": "QRIS (GoPay, OVO, DANA, ShopeePay)"
                       },
                       "kurir": {
                         "id": 2,
@@ -1200,8 +1212,8 @@
                     "total": 76000,
                     "status": "menunggu_pembayaran",
                     "metode_pembayaran": {
-                      "kode": "transfer_manual",
-                      "nama": "Transfer Manual"
+                      "kode": "xendit_qris",
+                      "nama": "QRIS (GoPay, OVO, DANA, ShopeePay)"
                     },
                     "kurir": {
                       "id": 2,
@@ -1315,8 +1327,8 @@
                     "total": 76000,
                     "status": "menunggu_konfirmasi",
                     "metode_pembayaran": {
-                      "kode": "transfer_manual",
-                      "nama": "Transfer Manual"
+                      "kode": "xendit_qris",
+                      "nama": "QRIS (GoPay, OVO, DANA, ShopeePay)"
                     },
                     "kurir": {
                       "id": 2,
@@ -1400,6 +1412,216 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/pesanan/{id}/pembayaran": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "ID pesanan.",
+          "schema": {
+            "type": "integer"
+          },
+          "example": 7
+        }
+      ],
+      "post": {
+        "tags": ["Pembayaran"],
+        "summary": "Siapkan halaman pembayaran Xendit",
+        "description": "Membuat invoice Xendit untuk pesanan yang memakai metode `xendit_qris`, `xendit_ewallet`, `xendit_va`, atau `xendit_kartu`. Bila invoice masih berlaku, tautan yang sama dikembalikan. Invoice baru dibuat bila tautan lama sudah kedaluwarsa.",
+        "operationId": "buatPembayaranXendit",
+        "responses": {
+          "200": {
+            "description": "Tautan pembayaran siap dipakai.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsPembayaran"
+                },
+                "example": {
+                  "status": "sukses",
+                  "code": "200",
+                  "message": "Halaman pembayaran berhasil disiapkan.",
+                  "data": {
+                    "kanal": "xendit_qris",
+                    "invoice_id": "66f1c2e4a9b8c7001a2b3c4d",
+                    "invoice_url": "https://checkout.xendit.co/web/66f1c2e4a9b8c7001a2b3c4d",
+                    "status": "PENDING",
+                    "dibayar_pada": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Pesanan tidak ditemukan atau bukan milik pelanggan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "404",
+                  "message": "Pesanan tidak ditemukan.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pesanan tidak sedang menunggu pembayaran.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "409",
+                  "message": "Pesanan ini tidak sedang menunggu pembayaran.",
+                  "data": {
+                    "alasan": "status_tidak_sesuai",
+                    "status": "dibayar"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Pesanan memakai metode pembayaran non-Xendit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "422",
+                  "message": "Pesanan ini tidak memakai pembayaran Xendit.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Xendit gagal dihubungi atau kredensial belum diatur.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "502",
+                  "message": "Halaman pembayaran belum dapat dibuat. Periksa konfigurasi Xendit lalu coba lagi.",
+                  "data": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/xendit/callback": {
+      "post": {
+        "tags": ["Pembayaran"],
+        "summary": "Webhook invoice Xendit",
+        "description": "Dipanggil Xendit setelah status invoice berubah. Endpoint ini tidak memakai token pelanggan; keaslian diperiksa lewat header `x-callback-token` yang nilainya sama dengan `XENDIT_CALLBACK_TOKEN`. Status `PAID`/`SETTLED` memindahkan pesanan dari `menunggu_pembayaran` ke `menunggu_konfirmasi`.",
+        "operationId": "callbackXendit",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-callback-token",
+            "in": "header",
+            "required": true,
+            "description": "Callback Token dari dashboard Xendit.",
+            "schema": {
+              "type": "string"
+            },
+            "example": "callback-token-rahasia"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["id", "external_id", "status"],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "ID invoice Xendit."
+                  },
+                  "external_id": {
+                    "type": "string",
+                    "description": "Nomor pesanan aplikasi."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["PENDING", "PAID", "SETTLED", "EXPIRED"]
+                  },
+                  "paid_amount": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "example": {
+                "id": "66f1c2e4a9b8c7001a2b3c4d",
+                "external_id": "TKO1-20261104-0007",
+                "status": "PAID",
+                "paid_amount": 76000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Callback diproses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "sukses"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Callback Xendit diproses."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Token callback tidak sah.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponsGagal"
+                },
+                "example": {
+                  "status": "gagal",
+                  "code": "401",
+                  "message": "Token callback tidak sah.",
+                  "data": null
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/schemas/ResponsValidasiGagal"
           }
         }
       }
@@ -1567,11 +1789,11 @@
           },
           "kode": {
             "type": "string",
-            "example": "transfer_manual"
+            "example": "xendit_qris"
           },
           "nama": {
             "type": "string",
-            "example": "Transfer Manual"
+            "example": "QRIS (GoPay, OVO, DANA, ShopeePay)"
           },
           "aktif": {
             "type": "boolean",
@@ -1670,6 +1892,40 @@
           }
         }
       },
+      "PembayaranXendit": {
+        "type": "object",
+        "properties": {
+          "kanal": {
+            "type": "string",
+            "nullable": true,
+            "description": "Kode metode pembayaran Xendit.",
+            "example": "xendit_qris"
+          },
+          "invoice_id": {
+            "type": "string",
+            "nullable": true,
+            "example": "66f1c2e4a9b8c7001a2b3c4d"
+          },
+          "invoice_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Halaman pembayaran Xendit yang dibuka aplikasi.",
+            "example": "https://checkout.xendit.co/web/66f1c2e4a9b8c7001a2b3c4d"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["PENDING", "PAID", "SETTLED", "EXPIRED"],
+            "example": "PENDING"
+          },
+          "dibayar_pada": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": null
+          }
+        }
+      },
       "CheckoutInput": {
         "type": "object",
         "required": ["nama_penerima", "alamat_penerima", "kurir_id", "metode_pembayaran"],
@@ -1692,7 +1948,7 @@
           "metode_pembayaran": {
             "type": "string",
             "description": "Kode metode pembayaran aktif.",
-            "example": "transfer_manual"
+            "example": "xendit_qris"
           }
         }
       },
@@ -1727,7 +1983,16 @@
           },
           "metode_pembayaran": {
             "type": "string",
-            "example": "transfer_manual"
+            "example": "xendit_qris"
+          },
+          "pembayaran": {
+            "description": "Berisi tautan pembayaran ketika invoice Xendit berhasil dibuat; dapat bernilai null bila invoice gagal dibuat.",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PembayaranXendit"
+              }
+            ]
           }
         }
       },
@@ -1834,18 +2099,27 @@
             "enum": ["menunggu_pembayaran", "menunggu_konfirmasi", "dibayar", "diproses", "dikirim", "selesai", "dibatalkan"],
             "example": "menunggu_pembayaran"
           },
+          "pembayaran": {
+            "description": "Berisi tautan pembayaran ketika invoice Xendit berhasil dibuat; dapat bernilai null bila invoice gagal dibuat.",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PembayaranXendit"
+              }
+            ]
+          },
           "metode_pembayaran": {
             "type": "object",
             "properties": {
               "kode": {
                 "type": "string",
                 "nullable": true,
-                "example": "transfer_manual"
+                "example": "xendit_qris"
               },
               "nama": {
                 "type": "string",
                 "nullable": true,
-                "example": "Transfer Manual"
+                "example": "QRIS (GoPay, OVO, DANA, ShopeePay)"
               }
             }
           },
@@ -2131,6 +2405,22 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/CheckoutHasil"
+              }
+            }
+          }
+        ]
+      },
+      "ResponsPembayaran": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ResponsSukses"
+          },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/PembayaranXendit"
               }
             }
           }

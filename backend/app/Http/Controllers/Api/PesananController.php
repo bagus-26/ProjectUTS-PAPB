@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\DetailPesanan;
 use App\Models\Pesanan;
+use App\Services\PembayaranService;
 use App\Services\PesananService;
 use App\Support\ResponsApi;
 use App\Support\StatusPesanan;
@@ -14,6 +15,10 @@ use Illuminate\Validation\Rule;
 
 class PesananController extends Controller
 {
+    public function __construct(
+        private readonly PembayaranService $pembayaranService,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $pesanan = Pesanan::query()
@@ -38,6 +43,10 @@ class PesananController extends Controller
         if ($pesanan === null) {
             return ResponsApi::gagal('Pesanan tidak ditemukan.', 404);
         }
+
+        // Sinkronkan status invoice agar pembayaran Xendit terdeteksi
+        // walau webhook belum diterima (mis. pengembangan di localhost).
+        $pesanan = $this->pembayaranService->sinkronkan($pesanan);
 
         return ResponsApi::sukses($this->representasi($pesanan, true), 'Rincian pesanan berhasil diambil');
     }
@@ -74,6 +83,7 @@ class PesananController extends Controller
             'ongkos_kirim' => $pesanan->ongkos_kirim,
             'total' => $pesanan->total,
             'status' => $pesanan->status,
+            'pembayaran' => $this->pembayaranService->ringkasan($pesanan),
             'metode_pembayaran' => [
                 'kode' => $pesanan->metodePembayaran?->kode,
                 'nama' => $pesanan->metodePembayaran?->nama,

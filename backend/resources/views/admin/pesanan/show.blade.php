@@ -179,6 +179,13 @@
                     <div class="info-row"><span>Kurir</span><strong>{{ $pesanan->kurir?->nama ?? '-' }}</strong></div>
                     <div class="info-row"><span>Wilayah</span><strong>{{ $pesanan->kurir?->wilayah ?? '-' }}</strong></div>
                     <div class="info-row"><span>Ongkos kirim</span><strong>{{ \App\Support\Uang::rupiah($pesanan->ongkos_kirim) }}</strong></div>
+                    @if ($pesanan->xendit_invoice_id)
+                        <div class="info-row"><span>Invoice Xendit</span><strong>{{ $pesanan->xendit_invoice_id }}</strong></div>
+                        <div class="info-row"><span>Status Xendit</span><strong>{{ $pesanan->xendit_status ?? '-' }}</strong></div>
+                        @if ($pesanan->xendit_invoice_url)
+                            <div class="info-row"><span>Halaman bayar</span><strong><a href="{{ $pesanan->xendit_invoice_url }}" target="_blank" rel="noopener">Buka</a></strong></div>
+                        @endif
+                    @endif
                 </div>
             </section>
         </div>

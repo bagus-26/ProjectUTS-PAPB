@@ -13,8 +13,10 @@ class MetodePembayaranSeeder extends Seeder
     public function run(): void
     {
         $metode = [
-            ['kode' => 'tunai_di_tempat', 'nama' => 'Tunai di Tempat'],
-            ['kode' => 'transfer_manual', 'nama' => 'Transfer Manual'],
+            ['kode' => 'xendit_qris', 'nama' => 'QRIS (GoPay, OVO, DANA, ShopeePay)'],
+            ['kode' => 'xendit_ewallet', 'nama' => 'E-Wallet (OVO, DANA, ShopeePay, LinkAja)'],
+            ['kode' => 'xendit_va', 'nama' => 'Virtual Account Bank'],
+            ['kode' => 'xendit_kartu', 'nama' => 'Kartu Kredit / Debit'],
         ];
 
         foreach ($metode as $data) {

@@ -19,6 +19,7 @@ class CheckoutService
 {
     public function __construct(
         private readonly JamOperasiToko $jamOperasiToko,
+        private readonly PembayaranService $pembayaranService,
     ) {}
 
     /**
@@ -299,6 +300,7 @@ class CheckoutService
             'ongkos_kirim' => $pesanan->ongkos_kirim,
             'total' => $pesanan->total,
             'metode_pembayaran' => $pesanan->metodePembayaran?->kode,
+            'pembayaran' => $this->pembayaranService->pastikanInvoice($pesanan),
         ];
     }
 }

@@ -5,8 +5,10 @@ use App\Http\Controllers\Api\KategoriController;
 use App\Http\Controllers\Api\KeranjangController;
 use App\Http\Controllers\Api\KurirController;
 use App\Http\Controllers\Api\MetodePembayaranController;
+use App\Http\Controllers\Api\PembayaranController;
 use App\Http\Controllers\Api\PesananController;
 use App\Http\Controllers\Api\ProdukController;
+use App\Http\Controllers\Api\XenditCallbackController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/produk', [ProdukController::class, 'index']);
@@ -27,6 +29,9 @@ Route::get('/metode-pembayaran', [MetodePembayaranController::class, 'index']);
 
 Route::post('/checkout', [CheckoutController::class, 'store']);
 
+Route::post('/xendit/callback', [XenditCallbackController::class, 'store']);
+
 Route::get('/pesanan', [PesananController::class, 'index']);
 Route::get('/pesanan/{id}', [PesananController::class, 'show']);
+Route::post('/pesanan/{id}/pembayaran', [PembayaranController::class, 'store']);
 Route::patch('/pesanan/{id}/status', [PesananController::class, 'ubahStatus']);

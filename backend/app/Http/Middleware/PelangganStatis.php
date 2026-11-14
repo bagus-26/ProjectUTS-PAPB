@@ -15,6 +15,11 @@ class PelangganStatis
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Webhook Xendit memakai header x-callback-token, bukan token pelanggan.
+        if ($request->is('api/xendit/callback')) {
+            return $next($request);
+        }
+
         $token = $request->bearerToken();
 
         if ($token === null || $token === '') {
