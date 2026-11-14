@@ -149,7 +149,7 @@ class HalamanProfil extends StatelessWidget {
                 _itemMenu(
                   ikon: Icons.payment_outlined,
                   judul: 'Metode Pembayaran',
-                  keterangan: 'GoPay, BCA Virtual, COD',
+                  keterangan: 'QRIS, E-Wallet, Virtual Account',
                 ),
                 const Divider(height: 1, indent: 56),
                 _itemMenu(

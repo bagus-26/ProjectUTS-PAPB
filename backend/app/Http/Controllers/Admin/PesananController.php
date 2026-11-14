@@ -71,6 +71,20 @@ class PesananController extends Controller
         try {
             $pesananService->ubahStatus($pesanan->id, $data['status']);
         } catch (ApiException $exception) {
+            if (
+                is_array($exception->data)
+                && ($exception->data['status_sekarang'] ?? null) === $data['status']
+            ) {
+                return redirect()->back()->with(
+                    'sukses',
+                    sprintf(
+                        'Status pesanan %s sudah berstatus %s.',
+                        $pesanan->nomor_pesanan,
+                        StatusPesanan::label($data['status']),
+                    ),
+                );
+            }
+
             return redirect()->back()->with('galat', $exception->getMessage());
         }
 

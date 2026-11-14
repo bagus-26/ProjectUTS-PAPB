@@ -9,6 +9,7 @@ import '../model/isi_keranjang.dart';
 import '../model/item_keranjang.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
+import '../model/pembayaran.dart';
 import '../model/pesanan.dart';
 import '../model/produk.dart';
 import 'galat_api.dart';
@@ -285,7 +286,7 @@ class LayananApi {
     return _daftar(data).map(Kurir.fromJson).toList();
   }
 
-  /// `GET /api/metode-pembayaran` — metode simulasi pembayaran.
+  /// `GET /api/metode-pembayaran` — metode pembayaran aktif.
   Future<List<MetodePembayaran>> ambilMetodePembayaran() async {
     final data = await kirim('GET', '/metode-pembayaran');
 
@@ -360,6 +361,22 @@ class LayananApi {
     return Pesanan.fromJson(
       data is Map ? Map<String, dynamic>.from(data) : const {},
     );
+  }
+
+  // -------------------------------------------------------------
+  // Pembayaran Xendit
+  // -------------------------------------------------------------
+
+  /// `POST /api/pesanan/{id}/pembayaran` — membuat atau memakai ulang
+  /// tautan pembayaran Xendit untuk pesanan yang masih menunggu pembayaran.
+  Future<Pembayaran> buatPembayaran(int id) async {
+    final data = await kirim('POST', '/pesanan/$id/pembayaran');
+
+    if (data is! Map) {
+      throw GalatApi.umum('Halaman pembayaran belum tersedia.');
+    }
+
+    return Pembayaran.fromJson(Map<String, dynamic>.from(data));
   }
 
   // -------------------------------------------------------------

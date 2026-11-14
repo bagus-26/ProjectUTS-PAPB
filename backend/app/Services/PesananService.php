@@ -18,7 +18,7 @@ class PesananService
      */
     public function ubahStatus(int $pesananId, string $statusBaru, ?int $pelangganId = null): Pesanan
     {
-        return DB::transaction(function () use ($pesananId, $statusBaru, $pelangganId): Pesanan {
+        $pesanan = DB::transaction(function () use ($pesananId, $statusBaru, $pelangganId): Pesanan {
             $query = Pesanan::query()->whereKey($pesananId);
 
             if ($pelangganId !== null) {
@@ -46,6 +46,14 @@ class PesananService
 
             return $pesanan->load(['pelanggan', 'kurir', 'metodePembayaran', 'detail']);
         });
+
+        if ($pesanan->status === StatusPesanan::DIBATALKAN) {
+            // Diselesaikan lewat container karena PembayaranService membutuhkan
+            // PesananService; injeksi konstruktor akan membuat dependensi melingkar.
+            app(PembayaranService::class)->batalkanInvoice($pesanan);
+        }
+
+        return $pesanan;
     }
 
     private function kembalikanStok(Pesanan $pesanan): void

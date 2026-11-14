@@ -22,6 +22,10 @@ class Pesanan extends Model
         'total',
         'status',
         'kunci_idempoten',
+        'xendit_invoice_id',
+        'xendit_invoice_url',
+        'xendit_status',
+        'dibayar_pada',
     ];
 
     /**
@@ -33,6 +37,7 @@ class Pesanan extends Model
             'subtotal' => 'integer',
             'ongkos_kirim' => 'integer',
             'total' => 'integer',
+            'dibayar_pada' => 'datetime',
         ];
     }
 
