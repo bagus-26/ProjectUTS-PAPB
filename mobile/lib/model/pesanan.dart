@@ -1,4 +1,5 @@
 import 'detail_pesanan.dart';
+import 'pembayaran.dart';
 
 /// Status pesanan sesuai state machine PRD Bagian 6.7.
 const Set<String> statusSah = {
@@ -28,6 +29,7 @@ class Pesanan {
   final String kodeMetode;
   final String? namaMetode;
   final String? dibuatPada;
+  final Pembayaran? pembayaran;
   final List<DetailPesanan> items;
 
   const Pesanan({
@@ -45,6 +47,7 @@ class Pesanan {
     this.kodeMetode = '',
     this.namaMetode,
     this.dibuatPada,
+    this.pembayaran,
     this.items = const [],
   });
 
@@ -88,6 +91,11 @@ class Pesanan {
         ? Map<String, dynamic>.from(metodeRaw)
         : <String, dynamic>{};
 
+    final pembayaranRaw = json['pembayaran'];
+    final pembayaran = pembayaranRaw is Map
+        ? Pembayaran.fromJson(Map<String, dynamic>.from(pembayaranRaw))
+        : null;
+
     return Pesanan(
       id: _bilangan(json['id']),
       nomorPesanan: json['nomor_pesanan']?.toString() ?? '',
@@ -115,6 +123,7 @@ class Pesanan {
       dibuatPada: json['created_at']?.toString() ??
           json['dibuat_pada']?.toString() ??
           json['tanggal']?.toString(),
+      pembayaran: pembayaran,
       items: items,
     );
   }
@@ -133,6 +142,7 @@ class Pesanan {
         'kode_metode': kodeMetode,
         'nama_metode': namaMetode,
         'created_at': dibuatPada,
+        'pembayaran': pembayaran?.toJson(),
         'items': items.map((item) => item.toJson()).toList(),
       };
 }

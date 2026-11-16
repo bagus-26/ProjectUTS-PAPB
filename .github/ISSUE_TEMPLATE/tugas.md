@@ -11,8 +11,8 @@ assignees: ""
 ## Kriteria selesai
 
 - [ ] Sesuai kontrak API (docs/PRD.md Bagian 6)
-- [ ] Sudah dicoba manual (Postman atau emulator)
-- [ ] Dokumen dan koleksi Postman diperbarui bila kontrak berubah
+- [ ] Sudah dicoba manual (Swagger atau emulator)
+- [ ] Dokumen dan koleksi Swagger diperbarui bila kontrak berubah
 - [ ] Lolos pagar pengaman (Bagian 4.3)
 - [ ] Bantuan AI dicatat di PR
 

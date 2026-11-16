@@ -1,5 +1,6 @@
-/// Model metode pembayaran simulasi sesuai `GET /api/metode-pembayaran`
-/// (PRD Bagian 5 & 6.3). Kode yang dikenal: `tunai_di_tempat`, `transfer_manual`.
+/// Model metode pembayaran aktif sesuai `GET /api/metode-pembayaran`
+/// (PRD Bagian 5 & 6.3). Kode yang dikenal: `xendit_qris`, `xendit_ewallet`,
+/// `xendit_va`, dan `xendit_kartu`.
 class MetodePembayaran {
   final int id;
   final String kode;

@@ -64,7 +64,7 @@ flutter pub get
 flutter run
 ```
 
-Untuk langkah lengkap menjalankan frontend di MEmu Player pada Windows, lihat [mobile/PANDUAN-RUN-MEMU.md](mobile/PANDUAN-RUN-MEMU.md). Alamat server diatur di `mobile/lib/konfigurasi/konfigurasi.dart`: emulator Android memakai `http://10.0.2.2:8000/api` secara default. Untuk MEmu atau emulator/perangkat yang memakai alamat host berbeda, jalankan Flutter dengan `--dart-define=API_BASE_URL=http://192.168.1.10:8000/api` (ganti alamat contoh dengan IPv4 laptop backend). Backend harus listen pada semua interface:
+Untuk langkah lengkap menjalankan aplikasi di HP Android fisik melalui USB dan Wi-Fi pada Windows, lihat [mobile/PANDUAN-RUN-HP.md](mobile/PANDUAN-RUN-HP.md). Alamat backend dapat diatur saat menjalankan Flutter dengan `--dart-define=API_BASE_URL=http://<IPv4-laptop>:8000/api`; gunakan alamat IPv4 laptop yang menjalankan backend, bukan `localhost`. Backend harus listen pada semua interface:
 
 ```bash
 php artisan serve --host=0.0.0.0 --port=8000
@@ -113,8 +113,23 @@ Daftar berikut adalah kontrak dalam PRD Bagian 6; endpoint yang terdaftar sudah 
 | PATCH | `/api/pesanan/{id}/status` | Ubah status pesanan | A3 |
 | GET | `/api/kategori` | Daftar kategori untuk filter | A1 |
 | GET | `/api/metode-pembayaran` | Daftar metode pembayaran simulasi | A3 |
+| POST | `/api/pesanan/{id}/pembayaran` | Siapkan tautan pembayaran Xendit | PM |
+| POST | `/api/xendit/callback` | Webhook invoice Xendit (tanpa token pelanggan) | PM |
 
-Dokumentasi endpoint API dalam format PDF tersedia di [`docs/PAPB-UTS_Kelompok-01_Makanan.pdf`](docs/PAPB-UTS_Kelompok-01_Makanan.pdf) (10 halaman: ERD, tabel endpoint, contoh request/response nyata, perhitungan, aturan bisnis, idempotensi, dan transisi status). Ekspor Postman belum dibuat.
+### Pembayaran Xendit
+
+Metode `xendit_qris`, `xendit_ewallet`, `xendit_va`, dan `xendit_kartu` membuat invoice di Xendit saat checkout. Respons checkout menyertakan `pembayaran.invoice_url`; tombol **Bayar Sekarang** pada Rincian Pesanan membuka halaman tersebut. Status pesanan diperbarui oleh webhook `POST /api/xendit/callback` atau, sebagai cadangan, dengan menanyakan status invoice saat rincian pesanan dibuka. Panduan pendaftaran akun, pengisian kunci, dan pengujian tersedia di [`docs/integrasi-xendit.md`](docs/integrasi-xendit.md).
+
+Dokumentasi endpoint API dalam format PDF tersedia di [`docs/PAPB-UTS_Kelompok-01_Makanan.pdf`](docs/PAPB-UTS_Kelompok-01_Makanan.pdf) (10 halaman: ERD, tabel endpoint, contoh request/response nyata, perhitungan, aturan bisnis, idempotensi, dan transisi status).
+
+### Dokumentasi API (Swagger UI)
+
+Dokumentasi interaktif 16 endpoint tersedia lewat Swagger UI dengan Base URL `http://127.0.0.1:8000/api`.
+
+1. Jalankan backend: `cd backend` lalu `php artisan serve`.
+2. Buka `http://127.0.0.1:8000/api`.
+3. Klik **Authorize**, isi token pelanggan tanpa awalan `Bearer`, lalu gunakan **Try it out** pada endpoint yang ingin dicoba.
+4. Spesifikasi OpenAPI 3.0 dapat diakses di `http://127.0.0.1:8000/api/openapi.json` (sumber: `backend/resources/openapi/openapi.json`).
 
 ### Panel Admin
 
@@ -175,13 +190,14 @@ Bantuan AI: fondasi awal PM-01/PM-02/PM-03/PM-05 (struktur repo, skeleton Larave
 Pustaka produksi:
 
 - Laravel 12 dan ekosistemnya (`laravel/framework`, `laravel/tinker`).
-- Flutter dengan paket `http` (permintaan HTTP) dan `uuid` (kunci idempoten checkout, terdaftar di `mobile/pubspec.yaml`).
+- Flutter dengan paket `http` (permintaan HTTP), `uuid` (kunci idempoten checkout), `geolocator` dan `flutter_map` (lokasi), serta `url_launcher` (membuka halaman pembayaran Xendit).
 
-Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Tidak ada payment gateway maupun API ekspedisi.
+Pustaka pengembangan: PHPUnit, Laravel Pint, Laravel Pail, Laravel Boost. Payment gateway memakai Xendit Invoice API lewat HTTP client Laravel tanpa SDK tambahan; tidak ada API ekspedisi.
 
 ## 11. Status Implementasi Saat Ini
 
 - Backend sudah memiliki pembungkus respons, middleware, handler exception, seluruh endpoint kontrak Bagian 6, serta migrasi dan seeder domain.
 - Flutter mengimplementasikan alur katalog, produk, keranjang, checkout, riwayat/status pesanan, profil demo, pemilihan koordinat lokasi secara manual, dan splash screen.
 - PRD mensyaratkan 7 halaman Flutter, migration dan seeder domain, serta endpoint berfungsi. Semua itu masih menjadi pekerjaan implementasi; status terkini dapat berubah seiring pengerjaan.
+- Integrasi Xendit (Invoice API) menambahkan empat metode pembayaran, tautan pembayaran di aplikasi, webhook, dan sinkronisasi status cadangan. Kode terkait diuji oleh `backend/tests/Feature/XenditPembayaranTest.php`.
 - PDF dokumentasi API tersedia di `docs/` dan panel admin tersedia di `/admin`. Ekspor Postman belum dibuat. Video demo tidak dibuat; rencana pembuktian menggunakan demo langsung sesuai PRD.

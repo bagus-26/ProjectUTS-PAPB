@@ -94,13 +94,17 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
     try {
       await _layanan.ubahJumlahKeranjang(id: item.id, jumlah: jumlahBaru);
     } on GalatApi catch (g) {
+      if (!mounted) return;
       tampilkanGalat(context, g);
     } catch (_) {
+      if (!mounted) return;
       tampilkanGalat(context, GalatApi.umum());
     } finally {
       // Sumber kebenaran tetap server: segarkan daftar + subtotal.
-      await _muatKeranjang(tampilkanMemuat: false);
-      if (mounted) setState(() => _sedangDiproses.remove(item.id));
+      if (mounted) {
+        await _muatKeranjang(tampilkanMemuat: false);
+        setState(() => _sedangDiproses.remove(item.id));
+      }
     }
   }
 
@@ -112,12 +116,16 @@ class _HalamanKeranjangState extends State<HalamanKeranjang> {
     try {
       await _layanan.hapusItemKeranjang(item.id);
     } on GalatApi catch (g) {
+      if (!mounted) return;
       tampilkanGalat(context, g);
     } catch (_) {
+      if (!mounted) return;
       tampilkanGalat(context, GalatApi.umum());
     } finally {
-      await _muatKeranjang(tampilkanMemuat: false);
-      if (mounted) setState(() => _sedangDiproses.remove(item.id));
+      if (mounted) {
+        await _muatKeranjang(tampilkanMemuat: false);
+        setState(() => _sedangDiproses.remove(item.id));
+      }
     }
   }
 

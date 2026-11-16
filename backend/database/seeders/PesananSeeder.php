@@ -22,14 +22,14 @@ class PesananSeeder extends Seeder
         $kurirAreaKampus = Kurir::query()->where('nama', 'Kurir Toko — Area Kampus')->firstOrFail();
         $kurirDalamKota = Kurir::query()->where('nama', 'Kurir Toko — Dalam Kota')->firstOrFail();
 
-        $tunai = MetodePembayaran::query()->where('kode', 'tunai_di_tempat')->firstOrFail();
-        $transfer = MetodePembayaran::query()->where('kode', 'transfer_manual')->firstOrFail();
+        $qris = MetodePembayaran::query()->where('kode', 'xendit_qris')->firstOrFail();
+        $ewallet = MetodePembayaran::query()->where('kode', 'xendit_ewallet')->firstOrFail();
 
         $this->buatPesanan([
             'nomor_pesanan' => 'TKO1-20261101-0001',
             'pelanggan_id' => $pelanggan->id,
             'kurir_id' => $kurirAreaKampus->id,
-            'metode_pembayaran_id' => $transfer->id,
+            'metode_pembayaran_id' => $qris->id,
             'nama_penerima' => 'Pelanggan Uji 1',
             'alamat_penerima' => 'Jl. Soepraoen No. 10, Malang',
             'ongkos_kirim' => 5000,
@@ -45,7 +45,7 @@ class PesananSeeder extends Seeder
             'nomor_pesanan' => 'TKO1-20261102-0002',
             'pelanggan_id' => $pelanggan->id,
             'kurir_id' => $kurirDalamKota->id,
-            'metode_pembayaran_id' => $tunai->id,
+            'metode_pembayaran_id' => $ewallet->id,
             'nama_penerima' => 'Pelanggan Uji 1',
             'alamat_penerima' => 'Jl. Soepraoen No. 10, Malang',
             'ongkos_kirim' => 10000,
@@ -61,7 +61,7 @@ class PesananSeeder extends Seeder
             'nomor_pesanan' => 'TKO1-20261103-0003',
             'pelanggan_id' => $pelanggan->id,
             'kurir_id' => $kurirAreaKampus->id,
-            'metode_pembayaran_id' => $transfer->id,
+            'metode_pembayaran_id' => $qris->id,
             'nama_penerima' => 'Pelanggan Uji 1',
             'alamat_penerima' => 'Jl. Soepraoen No. 10, Malang',
             'ongkos_kirim' => 5000,
