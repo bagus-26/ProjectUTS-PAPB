@@ -9,6 +9,7 @@ use App\Services\ProdukService;
 use App\Support\AturanProduk;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProdukController extends Controller
@@ -91,6 +92,45 @@ class ProdukController extends Controller
         return redirect()->route('admin.produk.index')->with(
             'sukses',
             'Menu "'.$produk->nama.'" berhasil dihapus.',
+        );
+    }
+
+    public function ubahStok(Request $request, Produk $produk): RedirectResponse
+    {
+        $data = $request->validate([
+            'stok' => ['required', 'integer', 'min:0', 'max:4294967295'],
+            'aksi' => ['nullable', 'string', Rule::in(['tambah', 'kurang', 'set'])],
+        ]);
+
+        $stok = match ($data['aksi'] ?? 'set') {
+            'tambah' => $produk->stok + 1,
+            'kurang' => max(0, $produk->stok - 1),
+            default => (int) $data['stok'],
+        };
+
+        $produk->update(['stok' => $stok]);
+
+        return redirect()->back()->with(
+            'sukses',
+            sprintf('Stok "%s" diperbarui menjadi %d.', $produk->nama, $stok),
+        );
+    }
+
+    public function ubahKetersediaan(Request $request, Produk $produk): RedirectResponse
+    {
+        $data = $request->validate([
+            'tersedia' => ['required', 'boolean'],
+        ]);
+
+        $produk->update(['tersedia' => (bool) $data['tersedia']]);
+
+        return redirect()->back()->with(
+            'sukses',
+            sprintf(
+                'Status "%s" diubah menjadi %s.',
+                $produk->nama,
+                $produk->tersedia ? 'Tersedia' : 'Habis',
+            ),
         );
     }
 }

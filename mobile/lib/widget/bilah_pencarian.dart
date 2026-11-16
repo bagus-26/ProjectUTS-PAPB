@@ -9,12 +9,25 @@ class BilahPencarian extends StatefulWidget {
   final VoidCallback? saatFilterDitekan;
   final String petunjuk;
 
+  /// Radius sudut kolom. `30` menghasilkan bentuk pill penuh (Home).
+  final double radius;
+
+  /// Menaruh ikon filter di dalam kolom pencarian, bukan sebagai tombol
+  /// terpisah di sebelah kanan (Home).
+  final bool filterDiDalam;
+
+  /// Ikon tombol filter.
+  final IconData ikonFilter;
+
   const BilahPencarian({
     super.key,
     this.nilaiAwal = '',
     required this.saatCari,
     this.saatFilterDitekan,
     this.petunjuk = 'Cari menu favoritmu...',
+    this.radius = 16,
+    this.filterDiDalam = false,
+    this.ikonFilter = Icons.tune_rounded,
   });
 
   @override
@@ -50,6 +63,44 @@ class _BilahPencarianState extends State<BilahPencarian> {
     setState(() {});
   }
 
+  Widget _tombolBersihkan() {
+    return IconButton(
+      icon: const Icon(Icons.close_rounded, size: 18),
+      color: Colors.grey.shade600,
+      tooltip: 'Bersihkan pencarian',
+      onPressed: _bersihkan,
+    );
+  }
+
+  Widget _tombolFilter() {
+    return IconButton(
+      icon: Icon(widget.ikonFilter, size: 21),
+      color: TemaWarna.cokelatPekat,
+      tooltip: 'Filter menu',
+      onPressed: widget.saatFilterDitekan,
+    );
+  }
+
+  Widget? _bangunSuffix() {
+    final adaTeks = _controller.text.isNotEmpty;
+    final adaFilter =
+        widget.filterDiDalam && widget.saatFilterDitekan != null;
+
+    if (!adaTeks && !adaFilter) return null;
+
+    if (adaFilter) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (adaTeks) _tombolBersihkan(),
+          _tombolFilter(),
+        ],
+      );
+    }
+
+    return _tombolBersihkan();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -59,11 +110,11 @@ class _BilahPencarianState extends State<BilahPencarian> {
             height: 50,
             decoration: BoxDecoration(
               color: TemaWarna.latarPutih,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(widget.radius),
               border: Border.all(color: TemaWarna.garisAbu),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withAlpha(8),
+                  color: Colors.black.withAlpha(5),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -92,20 +143,14 @@ class _BilahPencarianState extends State<BilahPencarian> {
                   color: Colors.grey.shade500,
                   size: 22,
                 ),
-                suffixIcon: _controller.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        color: Colors.grey.shade600,
-                        onPressed: _bersihkan,
-                      )
-                    : null,
+                suffixIcon: _bangunSuffix(),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
         ),
-        if (widget.saatFilterDitekan != null) ...[
+        if (!widget.filterDiDalam && widget.saatFilterDitekan != null) ...[
           const SizedBox(width: 10),
           InkWell(
             onTap: widget.saatFilterDitekan,
@@ -125,9 +170,9 @@ class _BilahPencarianState extends State<BilahPencarian> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.tune_rounded,
-                color: TemaWarna.teksUtama,
+              child: Icon(
+                widget.ikonFilter,
+                color: TemaWarna.cokelatPekat,
                 size: 22,
               ),
             ),

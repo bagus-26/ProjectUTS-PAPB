@@ -218,6 +218,36 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
 
   void _konfirmasiDiterima() => _ubahStatus('selesai');
 
+  /// Membuka titik pengiriman di aplikasi Google Maps perangkat.
+  Future<void> _bukaMaps(Pesanan pesanan) async {
+    if (!pesanan.punyaKoordinat) return;
+
+    final tautan = Uri.parse(
+      'https://www.google.com/maps?q=${pesanan.latitude},${pesanan.longitude}',
+    );
+
+    try {
+      final dibuka = await launchUrl(
+        tautan,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!dibuka && mounted) {
+        tampilkanGalat(
+          context,
+          GalatApi.umum('Google Maps tidak dapat dibuka.'),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        tampilkanGalat(
+          context,
+          GalatApi.umum('Google Maps tidak dapat dibuka.'),
+        );
+      }
+    }
+  }
+
   /// Kembali ke Katalog dengan tumpukan rute dibersihkan (PRD 7.1).
   void _keKatalog() {
     Navigator.of(context).pushAndRemoveUntil(
@@ -448,7 +478,83 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
 
         const SizedBox(height: 14),
 
-        // 2. Info kurir (bila server mengirimkannya)
+        // 2. Alamat pengiriman (label, penerima, WhatsApp, patokan, Maps)
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 20,
+                    color: TemaWarna.cokelatUtama,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '[${pesanan.labelAlamat}]',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (pesanan.punyaKoordinat)
+                    TextButton.icon(
+                      onPressed: () => _bukaMaps(pesanan),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.map_outlined, size: 16),
+                      label: const Text(
+                        'Maps',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                pesanan.namaPenerima,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (pesanan.phone != null &&
+                  pesanan.phone!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  pesanan.phone!,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: TemaWarna.teksSekunder,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                pesanan.alamatLengkap,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.45,
+                  color: TemaWarna.teksGelap,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // 3. Info kurir (bila server mengirimkannya)
         if (pesanan.namaKurir != null) ...[
           Container(
             padding: const EdgeInsets.all(16),
@@ -502,7 +608,7 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
           const SizedBox(height: 14),
         ],
 
-        // 3. Rincian item + harga saat beli (snapshot D-08)
+        // 4. Rincian item + harga saat beli (snapshot D-08)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -589,6 +695,13 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 'Metode Pembayaran',
                 pesanan.namaMetode ?? pesanan.kodeMetode,
               ),
+              _barisTotal('Subtotal Produk', formatRupiah(pesanan.subtotal)),
+              if (pesanan.diskon > 0)
+                _barisTotal(
+                  'Diskon Voucher',
+                  '−${formatRupiah(pesanan.diskon)}',
+                  warnaNilai: TemaWarna.hijauBuka,
+                ),
               if (pesanan.ongkosKirim != null)
                 _barisTotal('Ongkos Kirim', formatRupiah(pesanan.ongkosKirim!)),
               _barisTotal(
@@ -596,6 +709,14 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
                 formatRupiah(pesanan.total),
                 tebal: true,
               ),
+              if (pesanan.poinDiberikan > 0) ...[
+                const Divider(height: 20),
+                _barisTotal(
+                  'Poin Reward Didapat',
+                  '+${pesanan.poinDiberikan} poin',
+                  warnaNilai: TemaWarna.cokelatKaramel,
+                ),
+              ],
             ],
           ),
         ),
@@ -603,7 +724,12 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
     );
   }
 
-  Widget _barisTotal(String label, String nilai, {bool tebal = false}) {
+  Widget _barisTotal(
+    String label,
+    String nilai, {
+    bool tebal = false,
+    Color? warnaNilai,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -629,7 +755,8 @@ class _HalamanDetailPesananState extends State<HalamanDetailPesanan> {
               style: TextStyle(
                 fontSize: tebal ? 15 : 13,
                 fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
-                color: tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama,
+                color: warnaNilai ??
+                    (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
               ),
             ),
           ),

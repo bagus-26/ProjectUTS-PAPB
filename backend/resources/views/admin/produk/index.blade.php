@@ -68,8 +68,29 @@
                                 </td>
                                 <td>{{ $produk->kategori }}</td>
                                 <td class="nowrap">{{ \App\Support\Uang::rupiah($produk->harga) }}</td>
-                                <td>{{ $produk->stok }}</td>
-                                <td><span class="badge badge-{{ $statusProduk[1] }}">{{ $statusProduk[0] }}</span></td>
+                                <td>
+                                    <form class="stock-form" method="POST" action="{{ route('admin.produk.stok', $produk) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button class="stock-btn" type="submit" name="aksi" value="kurang" title="Kurangi stok">−</button>
+                                        <input class="stock-input" type="number" name="stok" min="0" value="{{ $produk->stok }}" aria-label="Stok {{ $produk->nama }}">
+                                        <button class="stock-btn" type="submit" name="aksi" value="tambah" title="Tambah stok">+</button>
+                                        <button class="btn btn-sm btn-outline" type="submit" name="aksi" value="set">Set</button>
+                                    </form>
+                                </td>
+                                <td>
+                                    <div class="status-toggle">
+                                        <span class="badge badge-{{ $statusProduk[1] }}">{{ $statusProduk[0] }}</span>
+                                        <form class="inline-form" method="POST" action="{{ route('admin.produk.ketersediaan', $produk) }}">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input type="hidden" name="tersedia" value="{{ $produk->tersedia ? 0 : 1 }}">
+                                            <button class="btn btn-sm {{ $produk->tersedia ? 'btn-danger' : 'btn-success' }}" type="submit">
+                                                {{ $produk->tersedia ? 'Set Habis' : 'Set Tersedia' }}
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
                                 <td class="cell-sub">
                                     {{ $produk->varian->map(fn ($varian) => $varian->nama)->implode(', ') ?: '-' }}
                                 </td>

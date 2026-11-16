@@ -25,6 +25,10 @@ class KanalXendit
     {
         return match ($kode) {
             'xendit_qris' => ['payment_methods' => ['QRIS']],
+            'xendit_gopay' => ['payment_methods' => ['OVO', 'DANA', 'SHOPEEPAY', 'LINKAJA']],
+            'xendit_dana' => ['payment_methods' => ['DANA']],
+            'xendit_ovo' => ['payment_methods' => ['OVO']],
+            'xendit_transfer' => ['payment_methods' => ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA']],
             'xendit_ewallet' => ['payment_methods' => ['OVO', 'DANA', 'SHOPEEPAY', 'LINKAJA']],
             'xendit_va' => ['payment_methods' => ['BCA', 'BNI', 'BRI', 'MANDIRI', 'PERMATA']],
             'xendit_kartu' => ['payment_methods' => ['CREDIT_CARD']],

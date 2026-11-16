@@ -7,10 +7,12 @@ import '../layanan/layanan_lokasi.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../model/isi_keranjang.dart';
+import '../model/katalog_promo.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
 import '../model/pesanan.dart';
 import '../model/ringkasan_keranjang.dart';
+import '../model/voucher_pelanggan.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
@@ -20,6 +22,7 @@ import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
 import 'halaman_detail_pesanan.dart';
+import 'halaman_promo.dart';
 
 /// Halaman Checkout (Kelompok 1: MakanYuk!)
 ///
@@ -42,7 +45,21 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   final LayananApi _layanan = LayananApi();
   final GlobalKey<FormState> _kunciForm = GlobalKey<FormState>();
   final TextEditingController _namaController = TextEditingController();
-  final TextEditingController _alamatController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _regionController = TextEditingController();
+  final TextEditingController _streetController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+
+  /// Label alamat ala Shopee: Rumah, Kantor, Kampus, atau Lainnya.
+  String _labelAlamat = 'Rumah';
+
+  /// Koordinat opsional dari tombol "Gunakan lokasi saya".
+  double? _latitude;
+  double? _longitude;
+
+  /// Voucher aktif milik pelanggan (`GET /promos`) untuk pemilih di checkout.
+  List<VoucherPelanggan> _voucherAktif = [];
+  int? _voucherTerpilihId;
 
   /// Kunci idempoten dibuat **sekali per kunjungan** halaman (PRD 7.4).
   /// Tombol coba lagi setelah galat sambungan/timeout memakai kunci yang sama,
@@ -80,7 +97,10 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   @override
   void dispose() {
     _namaController.dispose();
-    _alamatController.dispose();
+    _phoneController.dispose();
+    _regionController.dispose();
+    _streetController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
@@ -97,23 +117,58 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
       final kurir = await _layanan.ambilKurir();
       final metode = await _layanan.ambilMetodePembayaran();
       final riwayat = await _layanan.ambilDaftarPesanan();
+
+      // Voucher bersifat opsional: kegagalan memuat promo tidak boleh
+      // menghalangi pelanggan menyelesaikan checkout.
+      KatalogPromo? katalog;
+      try {
+        katalog = await _layanan.ambilKatalogPromo();
+      } catch (_) {
+        katalog = null;
+      }
+
       if (!mounted) return;
 
       setState(() {
+        final alamatPilihan = LayananLokasi.alamatPengirimanPilihan;
+
         if (riwayat.isNotEmpty) {
           final pesananTerakhir = riwayat.first;
+
           if (_namaController.text.isEmpty) {
             _namaController.text = pesananTerakhir.namaPenerima;
           }
-          if (_alamatController.text.isEmpty) {
-            _alamatController.text =
-                LayananLokasi.alamatPengirimanPilihan ??
+          if (_phoneController.text.isEmpty) {
+            _phoneController.text = pesananTerakhir.phone ?? '';
+          }
+          if (_regionController.text.isEmpty) {
+            _regionController.text = pesananTerakhir.region ?? '';
+          }
+          if (_streetController.text.isEmpty) {
+            _streetController.text = alamatPilihan ??
+                pesananTerakhir.streetAddress ??
                 pesananTerakhir.alamatPenerima;
           }
-        } else if (_alamatController.text.isEmpty) {
-          _alamatController.text =
-              LayananLokasi.alamatPengirimanPilihan ?? '';
+
+          final labelTerakhir = pesananTerakhir.label?.trim();
+          if (labelTerakhir != null &&
+              const ['Rumah', 'Kantor', 'Kampus', 'Lainnya']
+                  .contains(labelTerakhir)) {
+            _labelAlamat = labelTerakhir;
+          }
+
+          _latitude ??= pesananTerakhir.latitude;
+          _longitude ??= pesananTerakhir.longitude;
+        } else if (_streetController.text.isEmpty && alamatPilihan != null) {
+          _streetController.text = alamatPilihan;
         }
+
+        _voucherAktif = katalog?.voucherAktif ?? [];
+        if (_voucherTerpilihId != null &&
+            !_voucherAktif.any((item) => item.id == _voucherTerpilihId)) {
+          _voucherTerpilihId = null;
+        }
+
         _daftarKurir = kurir.where((item) => item.aktif).toList();
         _daftarMetode = metode.where((item) => item.aktif).toList();
         if (_kurirTerpilihId == null && _daftarKurir.isNotEmpty) {
@@ -203,8 +258,12 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, ${posisi.longitude.toStringAsFixed(6)}';
     if (!mounted) return;
     setState(() {
-      _alamatController.text = alamat;
-      LayananLokasi.alamatPengirimanPilihan = alamat;
+      if (_streetController.text.trim().isEmpty) {
+        _streetController.text = alamat;
+      }
+      _latitude = posisi.latitude;
+      _longitude = posisi.longitude;
+      LayananLokasi.alamatPengirimanPilihan = _streetController.text.trim();
     });
     _statusLokasi.value = alamat;
     _bersihkanGalatKolom();
@@ -246,17 +305,32 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     });
 
     try {
+      final nama = _namaController.text.trim();
+      final phone = _phoneController.text.trim();
+      final region = _regionController.text.trim();
+      final street = _streetController.text.trim();
+      final catatan = _noteController.text.trim();
+      final alamatLengkap =
+          region.isEmpty ? street : '$street, $region';
+
       final Pesanan pesanan = await _layanan.buatCheckout(
-        namaPenerima: _namaController.text.trim(),
-        alamatPenerima: _alamatController.text.trim(),
+        namaPenerima: nama,
+        alamatPenerima: alamatLengkap,
         kurirId: _kurirTerpilihId!,
         metodePembayaran: _metodeTerpilih!,
         kunciIdempoten: _kunciIdempoten,
+        phone: phone,
+        region: region,
+        streetAddress: street,
+        detailNote: catatan,
+        label: _labelAlamat,
+        latitude: _latitude,
+        longitude: _longitude,
+        voucherId: _voucherTerpilihId,
       );
 
       if (!mounted) return;
-      LayananLokasi.alamatPengirimanPilihan =
-          _alamatController.text.trim();
+      LayananLokasi.alamatPengirimanPilihan = street;
 
       // 201 → Rincian Pesanan dengan tumpukan dibersihkan (PRD 7.1)
       Navigator.of(context).pushReplacement(
@@ -369,12 +443,17 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 
           const SizedBox(height: 14),
 
-          // 4. Isi keranjang (data server)
+          // 4. Voucher aktif milik pelanggan (opsional)
+          _kartuVoucher(),
+
+          const SizedBox(height: 14),
+
+          // 5. Isi keranjang (data server)
           _kartuItem(isi),
 
           const SizedBox(height: 14),
 
-          // 5. Rincian pembayaran dari `ringkasan` server
+          // 6. Rincian pembayaran dari `ringkasan` server
           _kartuRincian(ringkasan),
         ],
       ),
@@ -441,8 +520,11 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         children: [
           const Row(
             children: [
-              Icon(Icons.location_on_outlined,
-                  size: 20, color: TemaWarna.cokelatUtama),
+              Icon(
+                Icons.location_on_outlined,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
               SizedBox(width: 8),
               Text(
                 'Alamat Pengiriman',
@@ -454,13 +536,50 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
             ],
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final label in const [
+                'Rumah',
+                'Kantor',
+                'Kampus',
+                'Lainnya',
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _labelAlamat == label,
+                  showCheckmark: false,
+                  selectedColor: TemaWarna.kremLembut,
+                  backgroundColor: TemaWarna.abuMuda,
+                  side: BorderSide(
+                    color: _labelAlamat == label
+                        ? TemaWarna.cokelatKaramel
+                        : TemaWarna.garisAbu,
+                  ),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _labelAlamat == label
+                        ? TemaWarna.cokelatPekat
+                        : TemaWarna.teksSekunder,
+                  ),
+                  onSelected: _sedangKirim
+                      ? null
+                      : (_) => setState(() => _labelAlamat = label),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _namaController,
             textInputAction: TextInputAction.next,
             enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.words,
             decoration: _dekorasiInput(
               label: 'Nama Penerima',
               hint: 'Contoh: Budi Santoso',
+              kunci: 'nama_penerima',
             ),
             validator: (nilai) {
               final teks = nilai?.trim() ?? '';
@@ -472,16 +591,61 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
           ),
           const SizedBox(height: 12),
           TextFormField(
-            controller: _alamatController,
-            maxLines: 3,
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
             enabled: !_sedangKirim,
+            maxLength: 20,
             decoration: _dekorasiInput(
-              label: 'Alamat Pengiriman',
-              hint: 'Contoh: Jl. Mawar No. 12, Klojen, Kota Malang',
-            ),
+              label: 'Nomor WhatsApp',
+              hint: 'Contoh: 081234567890',
+              kunci: 'phone',
+            ).copyWith(counterText: ''),
             validator: (nilai) {
               final teks = nilai?.trim() ?? '';
-              if (teks.isEmpty) return 'Alamat pengiriman wajib diisi';
+              final digit = teks.replaceAll(RegExp(r'\D'), '');
+              if (teks.isEmpty) return 'Nomor WhatsApp wajib diisi';
+              if (digit.length < 9 || digit.length > 15) {
+                return 'Nomor WhatsApp tidak valid';
+              }
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _regionController,
+            textInputAction: TextInputAction.next,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.words,
+            maxLength: 60,
+            decoration: _dekorasiInput(
+              label: 'Kota / Kecamatan',
+              hint: 'Contoh: Lowokwaru, Kota Malang',
+              kunci: 'region',
+            ).copyWith(counterText: ''),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Kota/kecamatan wajib diisi';
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _streetController,
+            maxLines: 3,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: 180,
+            decoration: _dekorasiInput(
+              label: 'Alamat Lengkap',
+              hint: 'Contoh: Jl. Mawar No. 12, RT 02/RW 03',
+              kunci: 'street_address',
+            ).copyWith(counterText: ''),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Alamat lengkap wajib diisi';
               if (teks.length < 10) {
                 return 'Alamat terlalu pendek, tuliskan detail alamat';
               }
@@ -489,23 +653,54 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
             },
             onChanged: (_) => _bersihkanGalatKolom(),
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed:
-                _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
-            icon: _sedangAmbilLokasi
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location_rounded),
-            label: Text(
-              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Gunakan lokasi saya',
-            ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _noteController,
+            maxLines: 2,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: 200,
+            decoration: _dekorasiInput(
+              label: 'Patokan (opsional)',
+              hint: 'Contoh: Pagar hitam, sebelah warung kopi',
+              kunci: 'detail_note',
+            ).copyWith(counterText: ''),
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
+                icon: _sedangAmbilLokasi
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location_rounded, size: 18),
+                label: Text(
+                  _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Gunakan lokasi saya',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_latitude != null && _longitude != null)
+                Expanded(
+                  child: Text(
+                    'Koordinat tersimpan (${_latitude!.toStringAsFixed(4)}, '
+                    '${_longitude!.toStringAsFixed(4)})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: TemaWarna.hijauBuka,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const Text(
-            'Koordinat perlu dilengkapi dengan nama jalan dan patokan alamat.',
+            'Koordinat dikirim bersama alamat agar kurir mudah menemukan lokasi.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
@@ -513,10 +708,13 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     );
   }
 
-  InputDecoration _dekorasiInput({required String label, required String hint}) {
-    // Pesan galat 422 dari server tampil tepat di bawah kolomnya
-    final galat = _galatPerKolom[
-        label == 'Nama Penerima' ? 'nama_penerima' : 'alamat_penerima'];
+  InputDecoration _dekorasiInput({
+    required String label,
+    required String hint,
+    String? kunci,
+  }) {
+    // Pesan galat 422 dari server tampil tepat di bawah kolomnya.
+    final galat = kunci == null ? null : _galatPerKolom[kunci];
 
     return InputDecoration(
       labelText: label,
@@ -656,6 +854,229 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
     );
   }
 
+  VoucherPelanggan? get _voucherDipilih {
+    if (_voucherTerpilihId == null) return null;
+
+    for (final voucher in _voucherAktif) {
+      if (voucher.id == _voucherTerpilihId) return voucher;
+    }
+
+    return null;
+  }
+
+  /// Pratinjau diskon di klien; nilai final tetap dihitung server.
+  int _diskonPreview(RingkasanKeranjang ringkasan) {
+    final promo = _voucherDipilih?.promo;
+    if (promo == null) return 0;
+
+    return promo.perkiraanDiskon(ringkasan.subtotal);
+  }
+
+  int? _totalPreview(RingkasanKeranjang ringkasan) {
+    final ongkir = ringkasan.ongkosKirim;
+    if (ongkir == null) return null;
+
+    final total = ringkasan.subtotal + ongkir - _diskonPreview(ringkasan);
+
+    return total < 0 ? 0 : total;
+  }
+
+  Future<void> _muatVoucher() async {
+    try {
+      final katalog = await _layanan.ambilKatalogPromo();
+      if (!mounted) return;
+      setState(() {
+        _voucherAktif = katalog.voucherAktif;
+        if (_voucherTerpilihId != null &&
+            !_voucherAktif.any(
+              (voucher) => voucher.id == _voucherTerpilihId,
+            )) {
+          _voucherTerpilihId = null;
+        }
+      });
+    } catch (_) {
+      // Voucher opsional: checkout tetap berjalan tanpa voucher.
+    }
+  }
+
+  Future<void> _bukaHalamanPromo() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const HalamanPromo()),
+    );
+    if (mounted) await _muatVoucher();
+  }
+
+  Widget _kartuVoucher() {
+    final subtotal = _keranjang?.ringkasan.subtotal ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.confirmation_number_outlined,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Voucher & Promo',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ),
+              TextButton(
+                onPressed: _sedangKirim ? null : _bukaHalamanPromo,
+                child: const Text(
+                  'Tambah',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          if (_voucherAktif.isEmpty)
+            InkWell(
+              onTap: _sedangKirim ? null : _bukaHalamanPromo,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: TemaWarna.abuMuda,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Belum ada voucher. Klaim kode atau tukar poin di halaman Promo.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: TemaWarna.teksSekunder,
+                  ),
+                ),
+              ),
+            )
+          else ...[
+            _opsiVoucher(
+              id: null,
+              judul: 'Tanpa voucher',
+              keterangan: 'Bayar dengan harga normal',
+              terpilih: _voucherTerpilihId == null,
+              aktif: true,
+            ),
+            for (final voucher in _voucherAktif) ...[
+              const SizedBox(height: 8),
+              _opsiVoucher(
+                id: voucher.id,
+                judul: voucher.promo?.judul ?? 'Voucher MakanYuk!',
+                keterangan: _keteranganVoucher(voucher, subtotal),
+                terpilih: _voucherTerpilihId == voucher.id,
+                aktif: _voucherBolehDipakai(voucher, subtotal),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _voucherBolehDipakai(VoucherPelanggan voucher, int subtotal) {
+    final promo = voucher.promo;
+    if (promo == null) return false;
+
+    return subtotal >= promo.minimalBelanja;
+  }
+
+  String _keteranganVoucher(VoucherPelanggan voucher, int subtotal) {
+    final promo = voucher.promo;
+    if (promo == null) return voucher.labelStatus;
+
+    final potongan = promo.labelDiskon.isNotEmpty
+        ? promo.labelDiskon
+        : promo.labelTipe;
+    final kode = promo.kode.isEmpty ? '' : '${promo.kode} • ';
+
+    if (!_voucherBolehDipakai(voucher, subtotal)) {
+      return '$kode$potongan • Min. ${formatRupiah(promo.minimalBelanja)}';
+    }
+
+    return '$kode$potongan';
+  }
+
+  Widget _opsiVoucher({
+    required int? id,
+    required String judul,
+    required String keterangan,
+    required bool terpilih,
+    required bool aktif,
+  }) {
+    return InkWell(
+      onTap: !aktif || _sedangKirim
+          ? null
+          : () => setState(() => _voucherTerpilihId = id),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: terpilih ? TemaWarna.kremLembut : TemaWarna.abuMuda,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: terpilih
+                ? TemaWarna.cokelatKaramel
+                : TemaWarna.garisAbu,
+            width: terpilih ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              terpilih
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 20,
+              color: aktif
+                  ? (terpilih
+                      ? TemaWarna.cokelatKaramel
+                      : TemaWarna.teksSekunder)
+                  : TemaWarna.garisAbu,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    judul,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: aktif
+                          ? TemaWarna.teksUtama
+                          : TemaWarna.teksSekunder,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    keterangan,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: TemaWarna.teksSekunder,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _kartuItem(IsiKeranjang isi) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -736,6 +1157,12 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               'Subtotal Produk',
               formatRupiah(ringkasan.subtotal),
             ),
+            if (_diskonPreview(ringkasan) > 0)
+              _barisRincian(
+                'Diskon Voucher',
+                '−${formatRupiah(_diskonPreview(ringkasan))}',
+                warnaNilai: TemaWarna.hijauBuka,
+              ),
             _barisRincian(
               'Biaya Pengiriman',
               ringkasan.ongkosKirim == null
@@ -745,9 +1172,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
             const Divider(height: 20),
             _barisRincian(
               'Total Pembayaran',
-              ringkasan.total == null
+              _totalPreview(ringkasan) == null
                   ? '—'
-                  : formatRupiah(ringkasan.total!),
+                  : formatRupiah(_totalPreview(ringkasan)!),
               tebal: true,
             ),
           ],
@@ -834,9 +1261,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
                   ),
                 ),
                 Text(
-                  ringkasan?.total == null
+                  ringkasan == null || _totalPreview(ringkasan) == null
                       ? '—'
-                      : formatRupiah(ringkasan!.total!),
+                      : formatRupiah(_totalPreview(ringkasan)!),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,

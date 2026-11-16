@@ -16,6 +16,16 @@ class Pesanan extends Model
         'kurir_id',
         'metode_pembayaran_id',
         'nama_penerima',
+        'phone',
+        'region',
+        'street_address',
+        'detail_note',
+        'label',
+        'latitude',
+        'longitude',
+        'user_voucher_id',
+        'discount_amount',
+        'poin_diberikan',
         'alamat_penerima',
         'subtotal',
         'ongkos_kirim',
@@ -37,6 +47,10 @@ class Pesanan extends Model
             'subtotal' => 'integer',
             'ongkos_kirim' => 'integer',
             'total' => 'integer',
+            'discount_amount' => 'integer',
+            'poin_diberikan' => 'integer',
+            'latitude' => 'float',
+            'longitude' => 'float',
             'dibayar_pada' => 'datetime',
         ];
     }
@@ -63,6 +77,14 @@ class Pesanan extends Model
     public function metodePembayaran(): BelongsTo
     {
         return $this->belongsTo(MetodePembayaran::class);
+    }
+
+    /**
+     * @return BelongsTo<UserVoucher, $this>
+     */
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(UserVoucher::class, 'user_voucher_id');
     }
 
     /**

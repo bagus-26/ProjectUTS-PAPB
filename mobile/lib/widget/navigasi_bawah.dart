@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import '../umum/tema_warna.dart';
 
 /// Widget bilah navigasi bawah (Bottom Navigation Bar)
-/// Menampilkan 4 tab utama: Home, Pesanan, Favorit, Profil sesuai UI rancangan
+/// Menampilkan 4 tab utama sesuai `home.png`:
+/// Home, Riwayat Pesanan, Favorit, dan Profil.
 class NavigasiBawah extends StatelessWidget {
   final int indeks;
   final ValueChanged<int> onTap;
@@ -16,25 +17,25 @@ class NavigasiBawah extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(
-          top: BorderSide(color: TemaWarna.garisAbu, width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 10,
-            offset: const Offset(0, -3),
-          ),
-        ],
-      ),
+      color: Colors.white,
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: TemaWarna.garisAbu),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(10),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _itemNavigasi(
                 posisi: 0,
@@ -46,7 +47,7 @@ class NavigasiBawah extends StatelessWidget {
                 posisi: 1,
                 ikon: Icons.receipt_long_outlined,
                 ikonAktif: Icons.receipt_long_rounded,
-                label: 'Pesanan',
+                label: 'Riwayat Pesanan',
               ),
               _itemNavigasi(
                 posisi: 2,
@@ -75,32 +76,41 @@ class NavigasiBawah extends StatelessWidget {
   }) {
     final bool aktif = indeks == posisi;
 
-    return InkWell(
-      onTap: () => onTap(posisi),
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              aktif ? ikonAktif : ikon,
-              color: aktif ? TemaWarna.cokelatUtama : Colors.grey.shade400,
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: aktif ? FontWeight.w700 : FontWeight.w500,
-                color: aktif ? TemaWarna.cokelatUtama : Colors.grey.shade500,
+    return Expanded(
+      child: InkWell(
+        onTap: () => onTap(posisi),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                aktif ? ikonAktif : ikon,
+                color: aktif
+                    ? TemaWarna.cokelatPekat
+                    : const Color(0xFF9A9A9A),
+                size: 23,
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  letterSpacing: -0.1,
+                  fontWeight: aktif ? FontWeight.w700 : FontWeight.w500,
+                  color: aktif
+                      ? TemaWarna.cokelatPekat
+                      : const Color(0xFF8A8A8A),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

@@ -15,7 +15,7 @@
         <h1>Masuk Panel Admin</h1>
         <p>Kelola pesanan, produk, dan jam operasional toko yang tersinkron dengan aplikasi Flutter.</p>
 
-        @if ($errors->any())
+        @if (isset($errors) && $errors->any())
             <div class="alert alert-danger">
                 <strong>Gagal masuk.</strong>
                 <ul>

@@ -20,17 +20,29 @@ class ProdukController extends Controller
     public function index(Request $request): JsonResponse
     {
         $produk = $this->produkService
-            ->queryDaftar($request->query('kategori'), $request->query('cari'))
+            ->queryDaftarPelanggan($request->query('kategori'), $request->query('cari'))
             ->get()
             ->map(fn (Produk $item): array => $this->representasi($item));
 
         return ResponsApi::sukses($produk, 'Daftar produk berhasil diambil');
     }
 
+    public function adminIndex(Request $request): JsonResponse
+    {
+        $produk = $this->produkService
+            ->queryDaftar($request->query('kategori'), $request->query('cari'))
+            ->get()
+            ->map(fn (Produk $item): array => $this->representasi($item));
+
+        return ResponsApi::sukses($produk, 'Daftar seluruh produk admin berhasil diambil');
+    }
+
     public function show(string $id): JsonResponse
     {
         $produk = Produk::query()
             ->with(['varian' => fn ($query) => $query->where('aktif', true)->orderBy('id')])
+            ->where('tersedia', true)
+            ->where('stok', '>', 0)
             ->find($id);
 
         if ($produk === null) {
@@ -72,6 +84,30 @@ class ProdukController extends Controller
         $this->produkService->hapus($produk);
 
         return ResponsApi::sukses(['id' => $produk->id], 'Produk berhasil dihapus');
+    }
+
+    public function ubahStok(Request $request, string $id): JsonResponse
+    {
+        $produk = Produk::query()->find($id);
+
+        if ($produk === null) {
+            return ResponsApi::gagal('Produk tidak ditemukan.', 404);
+        }
+
+        $data = $request->validate([
+            'stok' => ['required', 'integer', 'min:0'],
+            'aksi' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['tambah', 'kurang', 'set'])],
+        ]);
+
+        $stok = match ($data['aksi'] ?? 'set') {
+            'tambah' => $produk->stok + 1,
+            'kurang' => max(0, $produk->stok - 1),
+            default => (int) $data['stok'],
+        };
+
+        $produk->update(['stok' => $stok]);
+
+        return ResponsApi::sukses($this->representasi($produk), 'Stok produk berhasil diperbarui');
     }
 
     /**

@@ -50,6 +50,7 @@ class _HalamanUtamaState extends State<HalamanUtama> {
     ];
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: IndexedStack(
         index: _indeks,
         children: halaman,

@@ -281,39 +281,9 @@ class _HalamanRincianProdukState extends State<HalamanRincianProduk> {
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  GambarMenu(
-                    nama: _produk.nama,
-                    kategori: _produk.kategori,
-                  ),
-                  if (!siapPesan)
-                    Container(
-                      color: Colors.black.withAlpha(140),
-                      alignment: Alignment.center,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withAlpha(200),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white, width: 1.5),
-                        ),
-                        child: const Text(
-                          'STOK HABIS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              background: GambarMenu(
+                nama: _produk.nama,
+                kategori: _produk.kategori,
               ),
             ),
           ),

@@ -4,7 +4,9 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\PesananController;
 use App\Http\Controllers\Admin\ProdukController;
+use App\Http\Controllers\Admin\PromoController;
 use App\Http\Controllers\Admin\ReferensiController;
+use App\Http\Controllers\Admin\SupportController;
 use App\Http\Controllers\Admin\TokoController;
 use App\Http\Controllers\DokumentasiApiController;
 use App\Http\Controllers\HalamanPembayaranController;
@@ -34,6 +36,22 @@ Route::prefix('admin')->name('admin.')->group(function (): void {
         Route::patch('pesanan/{pesanan}/status', [PesananController::class, 'ubahStatus'])->name('pesanan.status');
 
         Route::resource('produk', ProdukController::class)->except(['show']);
+        Route::patch('produk/{produk}/stok', [ProdukController::class, 'ubahStok'])->name('produk.stok');
+        Route::patch('produk/{produk}/ketersediaan', [ProdukController::class, 'ubahKetersediaan'])->name('produk.ketersediaan');
+
+        // Alias penamaan /admin/menus untuk keselarasan instruksi
+        Route::get('menus', [ProdukController::class, 'index'])->name('menus.index');
+        Route::patch('menus/{produk}/stock', [ProdukController::class, 'ubahStok'])->name('menus.stock');
+
+        Route::resource('promo', PromoController::class)->except(['show']);
+        Route::patch('promo/{promo}/toggle', [PromoController::class, 'toggle'])->name('promo.toggle');
+
+        Route::get('support/conversations', [SupportController::class, 'conversations'])->name('support.conversations');
+        Route::get('support/messages/{pelanggan}', [SupportController::class, 'messages'])->name('support.messages');
+        Route::post('support/messages/{pelanggan}', [SupportController::class, 'store'])->name('support.messages.store');
+        Route::get('support', [SupportController::class, 'index'])->name('support.index');
+        Route::get('support/{pelanggan}', [SupportController::class, 'show'])->name('support.show');
+        Route::post('support/{pelanggan}', [SupportController::class, 'store'])->name('support.store');
 
         Route::get('toko', [TokoController::class, 'index'])->name('toko.index');
         Route::put('toko/{toko}', [TokoController::class, 'update'])->name('toko.update');
