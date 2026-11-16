@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             KurirSeeder::class,
             MetodePembayaranSeeder::class,
             ProdukSeeder::class,
+            PromoSeeder::class,
             PesananSeeder::class,
         ]);
     }

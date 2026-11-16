@@ -7,11 +7,15 @@ import 'package:http/http.dart' as http;
 import '../konfigurasi/konfigurasi.dart';
 import '../model/isi_keranjang.dart';
 import '../model/item_keranjang.dart';
+import '../model/katalog_promo.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
+import '../model/notifikasi.dart';
 import '../model/pembayaran.dart';
 import '../model/pesanan.dart';
+import '../model/pesan_dukungan.dart';
 import '../model/produk.dart';
+import '../model/profil_pelanggan.dart';
 import 'galat_api.dart';
 
 /// Satu-satunya kelas yang melakukan pemanggilan HTTP (PRD Bagian 7.5).
@@ -172,6 +176,12 @@ class LayananApi {
         .toList();
   }
 
+  Map<String, dynamic> _peta(dynamic data) {
+    if (data is! Map) return <String, dynamic>{};
+
+    return Map<String, dynamic>.from(data);
+  }
+
   // -------------------------------------------------------------
   // Produk (A1)
   // -------------------------------------------------------------
@@ -307,6 +317,14 @@ class LayananApi {
     required int kurirId,
     required String metodePembayaran,
     required String kunciIdempoten,
+    String? phone,
+    String? region,
+    String? streetAddress,
+    String? detailNote,
+    String? label,
+    double? latitude,
+    double? longitude,
+    int? voucherId,
   }) async {
     final data = await kirim(
       'POST',
@@ -317,6 +335,16 @@ class LayananApi {
         'alamat_penerima': alamatPenerima,
         'kurir_id': kurirId,
         'metode_pembayaran': metodePembayaran,
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        if (region != null && region.trim().isNotEmpty) 'region': region.trim(),
+        if (streetAddress != null && streetAddress.trim().isNotEmpty)
+          'street_address': streetAddress.trim(),
+        if (detailNote != null && detailNote.trim().isNotEmpty)
+          'detail_note': detailNote.trim(),
+        if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+        'latitude': ?latitude,
+        'longitude': ?longitude,
+        'user_voucher_id': ?voucherId,
       },
     );
 
@@ -377,6 +405,117 @@ class LayananApi {
     }
 
     return Pembayaran.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  // -------------------------------------------------------------
+  // Profil pelanggan
+  // -------------------------------------------------------------
+
+  /// `GET /api/profil` — identitas, poin, voucher, dan penghitung pesan.
+  Future<ProfilPelanggan> ambilProfil() async {
+    final data = await kirim('GET', '/profil');
+
+    return ProfilPelanggan.fromJson(_peta(data));
+  }
+
+  /// `PATCH /api/profil` — memperbarui nama, nomor WhatsApp, dan email.
+  Future<ProfilPelanggan> ubahProfil({
+    required String nama,
+    String? phone,
+    String? email,
+  }) async {
+    final data = await kirim(
+      'PATCH',
+      '/profil',
+      body: {
+        'nama': nama.trim(),
+        'phone': phone?.trim() ?? '',
+        'email': email?.trim() ?? '',
+      },
+    );
+
+    return ProfilPelanggan.fromJson(_peta(data));
+  }
+
+  // -------------------------------------------------------------
+  // Promo & voucher
+  // -------------------------------------------------------------
+
+  /// `GET /api/promos` — saldo poin, katalog promo, dan voucher pelanggan.
+  Future<KatalogPromo> ambilKatalogPromo() async {
+    final data = await kirim('GET', '/promos');
+
+    return KatalogPromo.fromJson(_peta(data));
+  }
+
+  /// `POST /api/promos/redeem-code` — klaim kode promo.
+  Future<HasilTukarPromo> klaimKodePromo(String kode) async {
+    final data = await kirim(
+      'POST',
+      '/promos/redeem-code',
+      body: {'code': kode.trim()},
+    );
+
+    return HasilTukarPromo.fromJson(_peta(data));
+  }
+
+  /// `POST /api/promos/redeem-point` — tukar poin menjadi voucher.
+  Future<HasilTukarPromo> tukarPoinPromo(int promoId) async {
+    final data = await kirim(
+      'POST',
+      '/promos/redeem-point',
+      body: {'promo_id': promoId},
+    );
+
+    return HasilTukarPromo.fromJson(_peta(data));
+  }
+
+  // -------------------------------------------------------------
+  // Pusat bantuan (CS chat)
+  // -------------------------------------------------------------
+
+  /// `GET /api/support/messages` — percakapan pelanggan dengan CS.
+  Future<List<PesanDukungan>> ambilPesanDukungan() async {
+    final data = await kirim('GET', '/support/messages');
+
+    return _daftar(data).map(PesanDukungan.fromJson).toList();
+  }
+
+  /// `POST /api/support/messages` — mengirim pesan ke CS.
+  Future<PesanDukungan> kirimPesanDukungan(String pesan) async {
+    final data = await kirim(
+      'POST',
+      '/support/messages',
+      body: {'message': pesan.trim()},
+    );
+
+    return PesanDukungan.fromJson(_peta(data));
+  }
+
+  /// `GET /api/support/unread-count` — jumlah balasan CS yang belum dibaca.
+  Future<int> ambilJumlahPesanBelumDibaca() async {
+    final data = await kirim('GET', '/support/unread-count');
+    final peta = _peta(data);
+
+    return peta['jumlah'] is int
+        ? peta['jumlah'] as int
+        : int.tryParse(peta['jumlah']?.toString() ?? '') ?? 0;
+  }
+
+  // -------------------------------------------------------------
+  // Notifikasi lonceng
+  // -------------------------------------------------------------
+
+  /// `GET /api/notifications` — daftar notifikasi terbaru + jumlah belum dibaca.
+  Future<DaftarNotifikasi> ambilNotifikasi() async {
+    final data = await kirim('GET', '/notifications');
+
+    return DaftarNotifikasi.fromJson(_peta(data));
+  }
+
+  /// `POST /api/notifications/read` — menandai semua notifikasi terbaca.
+  Future<void> tandaiNotifikasiTerbaca() async {
+    await kirim('POST', '/notifications/read');
   }
 
   // -------------------------------------------------------------

@@ -8,8 +8,16 @@ import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../layanan/layanan_geocoding.dart';
 import '../layanan/layanan_lokasi.dart';
+import '../model/profil_pelanggan.dart';
 import '../umum/tema_warna.dart';
+import 'halaman_bantuan.dart';
+import 'halaman_notifikasi.dart';
+import 'halaman_promo.dart';
 
+/// Tab Profil pelanggan, mengikuti rancangan `assets/images/profil.png`.
+///
+/// Menampilkan identitas, poin reward, voucher aktif, serta pintasan ke
+/// alamat pengiriman, metode pembayaran, riwayat, promo, dan pusat bantuan.
 class HalamanAkun extends StatefulWidget {
   final VoidCallback saatBukaRiwayat;
 
@@ -21,7 +29,8 @@ class HalamanAkun extends StatefulWidget {
 
 class _HalamanAkunState extends State<HalamanAkun> {
   final LayananApi _api = LayananApi();
-  String _nama = 'Pelanggan Uji 1';
+
+  ProfilPelanggan? _profil;
   String? _alamat;
   String? _galat;
   bool _memuat = true;
@@ -29,21 +38,13 @@ class _HalamanAkunState extends State<HalamanAkun> {
   final TextEditingController _alamatController = TextEditingController();
   final MapController _mapController = MapController();
   final LayananGeocoding _geocoding = const LayananGeocoding();
-
-  /// Status peta (memuat, hasil geocoding, atau galat) tampil di atas peta.
   final ValueNotifier<String> _statusPeta = ValueNotifier<String>(
     'Peta alamat pengiriman',
   );
-
   bool _sedangAmbilLokasi = false;
-
-  /// Peta baru bisa digerakkan setelah widget-nya terpasang; bila belum,
-  /// target disimpan dulu di [_targetPeta] lalu diterapkan saat peta siap.
   bool _petaSiap = false;
   LatLng? _titikPeta;
   LatLng? _targetPeta;
-
-  /// Jeda debounce ketikan manual; Nominatim membatasi ±1 permintaan/detik.
   Timer? _jedaGeocoding;
   int _urutanGeocoding = 0;
 
@@ -53,8 +54,7 @@ class _HalamanAkunState extends State<HalamanAkun> {
     LayananLokasi.alamatPengirimanNotifier.addListener(
       _padaAlamatGlobalBerubah,
     );
-    LayananLokasi.namaPenerimaNotifier.addListener(_padaNamaGlobalBerubah);
-    _muatRingkasan();
+    _muatProfil();
   }
 
   @override
@@ -62,7 +62,6 @@ class _HalamanAkunState extends State<HalamanAkun> {
     LayananLokasi.alamatPengirimanNotifier.removeListener(
       _padaAlamatGlobalBerubah,
     );
-    LayananLokasi.namaPenerimaNotifier.removeListener(_padaNamaGlobalBerubah);
     _jedaGeocoding?.cancel();
     _alamatController.dispose();
     _statusPeta.dispose();
@@ -71,62 +70,47 @@ class _HalamanAkunState extends State<HalamanAkun> {
 
   void _padaAlamatGlobalBerubah() {
     if (!mounted) return;
-    final alamatBaru = LayananLokasi.alamatPengirimanPilihan;
-    if (_alamat != alamatBaru) {
+    final alamat = LayananLokasi.alamatPengirimanPilihan;
+    if (_alamat != alamat) {
       setState(() {
-        _alamat = alamatBaru;
-        if (alamatBaru != null && _alamatController.text != alamatBaru) {
-          _alamatController.text = alamatBaru;
-        }
+        _alamat = alamat;
+        _alamatController.text = alamat ?? '';
       });
-      if (alamatBaru != null && alamatBaru.trim().length >= 10) {
+      if (alamat != null && alamat.trim().length >= 10) {
         _jedaGeocoding?.cancel();
         final urutan = ++_urutanGeocoding;
-        unawaited(_cariAlamatDiPeta(alamatBaru.trim(), urutan));
+        unawaited(_cariAlamatDiPeta(alamat.trim(), urutan));
       }
     }
   }
 
-  void _padaNamaGlobalBerubah() {
-    if (!mounted) return;
-    final namaBaru = LayananLokasi.namaPenerimaPilihan;
-    if (namaBaru != null && _nama != namaBaru) {
+  Future<void> _muatProfil({bool tampilkanMemuat = true}) async {
+    if (tampilkanMemuat) {
       setState(() {
-        _nama = namaBaru;
+        _memuat = true;
+        _galat = null;
       });
     }
-  }
-
-  Future<void> _muatRingkasan() async {
-    setState(() {
-      _memuat = true;
-      _galat = null;
-    });
 
     try {
+      final profil = await _api.ambilProfil();
       final pesanan = await _api.ambilDaftarPesanan();
       if (!mounted) return;
-      final pesananTerakhir = pesanan.isEmpty ? null : pesanan.first;
-      setState(() {
-        _alamat = LayananLokasi.alamatPengirimanPilihan;
-        if (pesananTerakhir != null) {
-          _nama =
-              LayananLokasi.namaPenerimaPilihan ?? pesananTerakhir.namaPenerima;
-          _alamat ??= pesananTerakhir.alamatPenerima;
-        }
-        LayananLokasi.namaPenerimaPilihan ??= _nama;
-        LayananLokasi.alamatPengirimanPilihan ??= _alamat;
-        if (_alamatController.text.trim().isEmpty && _alamat != null) {
-          _alamatController.text = _alamat!;
-        }
-        _memuat = false;
-      });
 
-      // Peta langsung menampilkan lokasi alamat yang sudah tersimpan,
-      // sehingga pin mengikuti alamat sejak halaman dibuka.
+      final terakhir = pesanan.isEmpty ? null : pesanan.first;
+      setState(() {
+        _profil = profil;
+        _alamat =
+            LayananLokasi.alamatPengirimanPilihan ??
+            terakhir?.alamatLengkap ??
+            terakhir?.alamatPenerima;
+        LayananLokasi.alamatPengirimanPilihan ??= _alamat;
+        _alamatController.text = _alamat ?? '';
+        _memuat = false;
+        _galat = null;
+      });
       final alamatAwal = _alamatController.text.trim();
       if (alamatAwal.length >= 10) {
-        _jedaGeocoding?.cancel();
         final urutan = ++_urutanGeocoding;
         unawaited(_cariAlamatDiPeta(alamatAwal, urutan));
       }
@@ -139,32 +123,58 @@ class _HalamanAkunState extends State<HalamanAkun> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _galat = 'Ringkasan akun tidak dapat dimuat. Coba lagi.';
+        _galat = 'Profil tidak dapat dimuat. Coba lagi.';
         _memuat = false;
       });
     }
   }
 
-  /// Mode **otomatis**: ambil lokasi perangkat lalu tampilkan alamatnya
-  /// (reverse geocoding), bukan koordinat mentah.
-  Future<void> _ambilLokasiPerangkat() async {
-    if (_sedangAmbilLokasi) return;
+  void _saatAlamatDiubah(String nilai) {
+    final alamat = nilai.trim();
+    setState(() {
+      _alamat = alamat.isEmpty ? null : alamat;
+      LayananLokasi.alamatPengirimanPilihan = _alamat;
+    });
 
-    // Pencarian manual yang masih tertunda dibatalkan agar tidak menimpa
-    // hasil lokasi perangkat.
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
+    if (alamat.length < 10) {
+      _statusPeta.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
+      return;
+    }
+    _jedaGeocoding = Timer(const Duration(milliseconds: 900), () {
+      unawaited(_cariAlamatDiPeta(alamat, urutan));
+    });
+  }
 
+  Future<void> _cariAlamatDiPeta(String alamat, int urutan) async {
+    _statusPeta.value = 'Mencari alamat di peta...';
+    final hasil = await _geocoding.cariAlamat(alamat);
+    if (!mounted || urutan != _urutanGeocoding) return;
+    if (hasil == null) {
+      _statusPeta.value =
+          'Alamat belum ditemukan atau layanan alamat tidak terjangkau.';
+      return;
+    }
+    final titik = LatLng(hasil.lintang, hasil.bujur);
+    setState(() => _titikPeta = titik);
+    _geserPetaKe(titik);
+    _statusPeta.value = 'Peta menampilkan: ${hasil.alamat}';
+  }
+
+  Future<void> _ambilLokasiPerangkat() async {
+    if (_sedangAmbilLokasi) return;
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
     setState(() => _sedangAmbilLokasi = true);
     _statusPeta.value = 'Mengambil lokasi perangkat...';
 
     try {
       final posisi = await const LayananLokasi().ambilPosisiSaatIni();
       if (!mounted || urutan != _urutanGeocoding) return;
-
       final titik = LatLng(posisi.latitude, posisi.longitude);
       setState(() => _titikPeta = titik);
-      _geserPetaKe(titik, 16);
+      _geserPetaKe(titik);
       _statusPeta.value = 'Mencari alamat dari lokasi perangkat...';
 
       final hasil = await _geocoding.balikArah(
@@ -172,7 +182,6 @@ class _HalamanAkunState extends State<HalamanAkun> {
         bujur: titik.longitude,
       );
       if (!mounted || urutan != _urutanGeocoding) return;
-
       final alamat =
           hasil?.alamat ??
           'Lokasi perangkat: ${titik.latitude.toStringAsFixed(6)}, '
@@ -182,82 +191,36 @@ class _HalamanAkunState extends State<HalamanAkun> {
         _alamatController.text = alamat;
         LayananLokasi.alamatPengirimanPilihan = alamat;
       });
-      _statusPeta.value = hasil != null
-          ? 'Alamat diambil dari lokasi perangkat'
-          : 'Layanan alamat tidak terjangkau; koordinat perangkat ditampilkan. Coba lagi.';
-    } on LayananLokasiException catch (galat) {
-      _statusPeta.value = galat.pesan;
-    } catch (e) {
-      _statusPeta.value =
-          'Lokasi gagal diambil ($e). Coba lagi atau ketuk titik di peta.';
+      _statusPeta.value = hasil == null
+          ? 'Alamat tidak ditemukan; koordinat perangkat ditampilkan.'
+          : 'Alamat diambil dari lokasi perangkat';
+    } on LayananLokasiException catch (error) {
+      if (mounted) _statusPeta.value = error.pesan;
+    } catch (error) {
+      if (mounted) {
+        _statusPeta.value = 'Lokasi gagal diambil ($error). Coba lagi.';
+      }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
   }
 
-  /// Mode **manual**: alamat disimpan tiap ketikan lalu peta di-geocode
-  /// setelah jeda, sehingga peta mengikuti alamat yang diketik.
-  void _saatAlamatDiubah(String nilai) {
-    final teks = nilai.trim();
-    setState(() {
-      _alamat = teks.isEmpty ? null : teks;
-      LayananLokasi.alamatPengirimanPilihan = teks.isEmpty ? null : teks;
-    });
-
-    _jedaGeocoding?.cancel();
-    final urutan = ++_urutanGeocoding;
-
-    if (teks.length < 10) {
-      _statusPeta.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
-      return;
-    }
-
-    _jedaGeocoding = Timer(
-      const Duration(milliseconds: 900),
-      () => _cariAlamatDiPeta(teks, urutan),
-    );
-  }
-
-  Future<void> _cariAlamatDiPeta(String teks, int urutan) async {
-    _statusPeta.value = 'Mencari lokasi alamat di peta...';
-    final hasil = await _geocoding.cariAlamat(teks);
-    if (!mounted || urutan != _urutanGeocoding) return;
-
-    if (hasil == null) {
-      _statusPeta.value = 'Alamat belum ditemukan di peta (atau layanan alamat tidak terjangkau). Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
-      return;
-    }
-
-    final titik = LatLng(hasil.lintang, hasil.bujur);
-    setState(() => _titikPeta = titik);
-    _geserPetaKe(titik, 16);
-    _statusPeta.value = 'Peta menampilkan: ${hasil.alamat}';
-  }
-
-  /// Mode **ketuk peta**: titik yang dipilih pengguna di-reverse geocode
-  /// menjadi alamat, lalu alamat itu mengisi kolom alamat pengiriman.
   Future<void> _saatPetaDiklik(LatLng titik) async {
-    // Ketikan manual yang masih tertunda dibatalkan agar tidak menimpa
-    // hasil pilihan dari peta.
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
-
-    // Pin pindah dulu supaya pengguna langsung melihat titik pilihannya,
-    // kamera tidak digeser karena titiknya memang sudah di layar.
     setState(() => _titikPeta = titik);
-    _statusPeta.value = 'Membaca alamat titik yang dipilih di peta...';
+    _statusPeta.value = 'Membaca alamat titik yang dipilih...';
 
     final hasil = await _geocoding.balikArah(
       lintang: titik.latitude,
       bujur: titik.longitude,
     );
     if (!mounted || urutan != _urutanGeocoding) return;
-
     if (hasil == null) {
-      _statusPeta.value = 'Alamat titik ini belum terbaca (layanan alamat tidak terjangkau). Ketuk lagi, atau tulis manual.';
+      _statusPeta.value =
+          'Alamat titik belum terbaca. Coba lagi atau tulis manual.';
       return;
     }
-
     setState(() {
       _alamat = hasil.alamat;
       _alamatController.text = hasil.alamat;
@@ -266,15 +229,296 @@ class _HalamanAkunState extends State<HalamanAkun> {
     _statusPeta.value = 'Alamat dari titik yang dipilih di peta';
   }
 
-  /// Menggerakkan peta ke [titik]; bila peta belum terpasang, targetnya
-  /// diterapkan lewat `onMapReady`.
-  void _geserPetaKe(LatLng titik, double zoom) {
-    _targetPeta = titik;
-    if (!_petaSiap) return;
+  void _geserPetaKe(LatLng titik) {
+    if (!_petaSiap) {
+      _targetPeta = titik;
+      return;
+    }
     try {
-      _mapController.move(titik, zoom);
+      _mapController.move(titik, 16);
     } catch (_) {
-      // Peta belum siap; target diterapkan saat onMapReady dipanggil.
+      _targetPeta = titik;
+    }
+  }
+
+  /// Dialog ubah nama, nomor WhatsApp, dan email lewat `PATCH /api/profil`.
+  Future<void> _ubahProfil() async {
+    final profil = _profil;
+    if (profil == null) return;
+
+    final namaController = TextEditingController(text: profil.nama);
+    final phoneController = TextEditingController(text: profil.phone ?? '');
+    final emailController = TextEditingController(text: profil.email ?? '');
+    String? galat;
+    var menyimpan = false;
+    var dialogAktif = true;
+
+    final hasil = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => PopScope<bool>(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) dialogAktif = false;
+        },
+        child: StatefulBuilder(
+          builder: (context, ubahDialog) => AlertDialog(
+            title: const Text('Ubah Profil'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: namaController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama lengkap',
+                      hintText: 'Contoh: Budi Santoso',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Nomor WhatsApp',
+                      hintText: 'Contoh: 081234567890',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'nama@email.com',
+                    ),
+                  ),
+                  if (galat != null) ...[
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        galat!,
+                        style: const TextStyle(
+                          color: TemaWarna.merahHabis,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: menyimpan
+                    ? null
+                    : () {
+                        dialogAktif = false;
+                        Navigator.of(dialogContext).pop(false);
+                      },
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: menyimpan
+                    ? null
+                    : () async {
+                        final nama = namaController.text.trim();
+                        if (nama.length < 3) {
+                          ubahDialog(() => galat = 'Nama minimal 3 karakter.');
+                          return;
+                        }
+
+                        ubahDialog(() {
+                          menyimpan = true;
+                          galat = null;
+                        });
+
+                        try {
+                          final baru = await _api.ubahProfil(
+                            nama: nama,
+                            phone: phoneController.text,
+                            email: emailController.text,
+                          );
+                          if (!mounted) return;
+                          if (!dialogAktif || !dialogContext.mounted) return;
+                          dialogAktif = false;
+                          setState(() => _profil = baru);
+                          LayananLokasi.namaPenerimaPilihan = baru.nama;
+                          Navigator.of(dialogContext).pop(true);
+                        } on GalatApi catch (error) {
+                          if (dialogAktif) {
+                            ubahDialog(() {
+                              menyimpan = false;
+                              galat = error.pesan;
+                            });
+                          }
+                        } catch (_) {
+                          if (dialogAktif) {
+                            ubahDialog(() {
+                              menyimpan = false;
+                              galat = 'Profil gagal disimpan. Coba lagi.';
+                            });
+                          }
+                        }
+                      },
+                child: menyimpan
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Simpan'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    namaController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+
+    if (hasil == true && mounted) {
+      _tampilkanPesan('Profil berhasil diperbarui.');
+    }
+  }
+
+  Future<void> _pilihAlamat() async {
+    final controller = TextEditingController(
+      text: LayananLokasi.alamatPengirimanPilihan ?? _alamat ?? '',
+    );
+    String? galat;
+    var mengambilLokasi = false;
+    var dialogMasihAktif = true;
+
+    final hasil = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => PopScope<String>(
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) dialogMasihAktif = false;
+        },
+        child: StatefulBuilder(
+          builder: (context, ubahDialog) => AlertDialog(
+            title: const Text('Alamat untuk checkout'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: controller,
+                  minLines: 2,
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Alamat pengiriman',
+                    hintText: 'Lengkapi jalan, nomor rumah, dan patokan',
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: mengambilLokasi
+                        ? null
+                        : () async {
+                            ubahDialog(() {
+                              mengambilLokasi = true;
+                              galat = null;
+                            });
+                            try {
+                              final posisi = await const LayananLokasi()
+                                  .ambilPosisiSaatIni();
+                              final hasil = await _geocoding.balikArah(
+                                lintang: posisi.latitude,
+                                bujur: posisi.longitude,
+                              );
+                              if (!dialogMasihAktif) return;
+                              controller.text =
+                                  hasil?.alamat ??
+                                  'Lokasi perangkat: '
+                                      '${posisi.latitude.toStringAsFixed(6)}, '
+                                      '${posisi.longitude.toStringAsFixed(6)}';
+                            } on LayananLokasiException catch (error) {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() => galat = error.pesan);
+                              }
+                            } catch (_) {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() {
+                                  galat =
+                                      'Lokasi tidak dapat diambil. Coba lagi.';
+                                });
+                              }
+                            } finally {
+                              if (dialogMasihAktif) {
+                                ubahDialog(() => mengambilLokasi = false);
+                              }
+                            }
+                          },
+                    icon: mengambilLokasi
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location_rounded),
+                    label: Text(
+                      mengambilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi',
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Koordinat perangkat bukan alamat lengkap. Lengkapi detail pengiriman sebelum checkout.',
+                  style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
+                ),
+                if (galat != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      galat!,
+                      style: const TextStyle(color: TemaWarna.merahHabis),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  dialogMasihAktif = false;
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (controller.text.trim().isEmpty) {
+                    ubahDialog(() => galat = 'Alamat pengiriman wajib diisi.');
+                    return;
+                  }
+                  dialogMasihAktif = false;
+                  Navigator.of(dialogContext).pop(controller.text.trim());
+                },
+                child: const Text('Gunakan alamat'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    controller.dispose();
+
+    if (hasil != null && mounted) {
+      setState(() {
+        _alamat = hasil;
+        _alamatController.text = hasil;
+        LayananLokasi.alamatPengirimanPilihan = hasil;
+      });
+      if (hasil.trim().length >= 10) {
+        final urutan = ++_urutanGeocoding;
+        unawaited(_cariAlamatDiPeta(hasil.trim(), urutan));
+      }
     }
   }
 
@@ -289,15 +533,23 @@ class _HalamanAkunState extends State<HalamanAkun> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: metode
-                .where((item) => item.aktif)
-                .map(
-                  (item) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(item.nama),
+            children: [
+              for (final item in metode.where((item) => item.aktif))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 17,
+                        color: TemaWarna.hijauBuka,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(item.nama)),
+                    ],
                   ),
-                )
-                .toList(),
+                ),
+            ],
           ),
           actions: [
             TextButton(
@@ -314,6 +566,58 @@ class _HalamanAkunState extends State<HalamanAkun> {
     }
   }
 
+  Future<void> _bukaPromo() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => const HalamanPromo()));
+    if (mounted) await _muatProfil(tampilkanMemuat: false);
+  }
+
+  Future<void> _bukaBantuan() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => const HalamanBantuan()));
+    if (mounted) await _muatProfil(tampilkanMemuat: false);
+  }
+
+  Future<void> _bukaNotifikasi() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const HalamanNotifikasi()));
+    if (mounted) await _muatProfil(tampilkanMemuat: false);
+  }
+
+  Future<void> _keluar() async {
+    final yakin = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar dari akun?'),
+        content: const Text(
+          'Aplikasi ini memakai akun demo dengan token statis. '
+          'Keluar akan membersihkan alamat pengiriman yang tersimpan di perangkat.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: TemaWarna.merahHabis,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+
+    if (yakin != true || !mounted) return;
+
+    LayananLokasi.alamatPengirimanPilihan = null;
+    _alamatController.clear();
+    setState(() => _alamat = null);
+    _tampilkanPesan('Alamat lokal dibersihkan. Sesi demo tetap aktif.');
+  }
+
   void _tampilkanPesan(String pesan) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -321,214 +625,158 @@ class _HalamanAkunState extends State<HalamanAkun> {
       ..showSnackBar(SnackBar(content: Text(pesan)));
   }
 
-  Future<void> _tampilkanDialogUbahNama() async {
-    final controller = TextEditingController(text: _nama);
-    final formKey = GlobalKey<FormState>();
-
-    final hasil = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ubah Nama Pengguna'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: controller,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Nama Lengkap',
-              hintText: 'Masukkan nama Anda',
-            ),
-            validator: (val) {
-              final teks = val?.trim() ?? '';
-              if (teks.isEmpty) return 'Nama tidak boleh kosong';
-              if (teks.length < 3) return 'Nama terlalu pendek';
-              return null;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() ?? false) {
-                Navigator.of(context).pop(controller.text.trim());
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
-    );
-
-    if (hasil != null && hasil.isNotEmpty && mounted) {
-      setState(() {
-        _nama = hasil;
-      });
-      LayananLokasi.namaPenerimaPilihan = hasil;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: TemaWarna.latarKrem,
-      appBar: AppBar(
-        title: const Text(
-          'Akun Saya',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: _memuat
-          ? const Center(child: CircularProgressIndicator())
-          : _galat != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_galat!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _muatRingkasan,
-                      child: const Text('Coba lagi'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : _bangunProfil(),
-    );
-  }
-
-  Widget _bangunProfil() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 30,
-                backgroundColor: TemaWarna.kremTua,
-                child: Icon(
-                  Icons.person,
-                  size: 36,
-                  color: TemaWarna.cokelatUtama,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _nama,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: _tampilkanDialogUbahNama,
-                          child: const Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: TemaWarna.cokelatUtama,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _alamat?.isNotEmpty == true
-                          ? _alamat!
-                          : 'Alamat pengiriman belum tersedia',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: TemaWarna.teksSekunder,
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Profil Saya',
+                      style: TextStyle(
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                        color: TemaWarna.cokelatPekat,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  _tombolLonceng(),
+                ],
               ),
-            ],
-          ),
+            ),
+            Expanded(child: _bangunIsi()),
+          ],
         ),
-        const SizedBox(height: 16),
-
-        // Alamat pengiriman + peta inline (tanpa popup).
-        _kartuAlamat(),
-        const SizedBox(height: 16),
-        Card(
-          color: Colors.white,
-          child: Column(
-            children: [
-              _menu(
-                ikon: Icons.payment_outlined,
-                judul: 'Metode pembayaran',
-                keterangan: 'Lihat metode pembayaran yang tersedia',
-                saatDitekan: _tampilkanMetodePembayaran,
-              ),
-              const Divider(height: 1, indent: 64),
-              _menu(
-                ikon: Icons.receipt_long_outlined,
-                judul: 'Riwayat pesanan',
-                keterangan: 'Daftar transaksi dan tagihan',
-                saatDitekan: widget.saatBukaRiwayat,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Akun menggunakan pelanggan demo yang ditentukan oleh token sesi.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
-        ),
-      ],
+      ),
     );
   }
 
-  /// Kartu alamat: input manual + tombol lokasi otomatis, dengan peta
-  /// yang tampil tepat di bawahnya dan mengikuti alamat yang dipilih.
+  Widget _tombolLonceng() {
+    final jumlah = _profil?.notifikasiBelumDibaca ?? 0;
+
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: _bukaNotifikasi,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(
+                Icons.notifications_none_rounded,
+                size: 26,
+                color: TemaWarna.cokelatPekat,
+              ),
+              if (jumlah > 0)
+                Positioned(
+                  top: -2,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16),
+                    decoration: BoxDecoration(
+                      color: TemaWarna.merahHabis,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      jumlah > 9 ? '9+' : '$jumlah',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bangunIsi() {
+    if (_memuat) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_galat != null || _profil == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _galat ?? 'Profil tidak tersedia.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: TemaWarna.cokelatPekat,
+                ),
+                onPressed: _muatProfil,
+                child: const Text('Coba lagi'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final profil = _profil!;
+
+    return RefreshIndicator(
+      color: TemaWarna.cokelatKaramel,
+      onRefresh: () => _muatProfil(tampilkanMemuat: false),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        children: [
+          _kartuIdentitas(profil),
+          const SizedBox(height: 16),
+          _kartuMenu(profil),
+          const SizedBox(height: 16),
+          _kartuAlamat(),
+          const SizedBox(height: 18),
+          _tombolKeluar(),
+        ],
+      ),
+    );
+  }
+
   Widget _kartuAlamat() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: TemaWarna.kremLembut, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.location_on_outlined,
-                size: 20,
-                color: TemaWarna.cokelatUtama,
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Alamat Pengiriman',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-            ],
+          const Text(
+            'Peta Alamat Pengiriman',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: TemaWarna.cokelatPekat,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -536,39 +784,13 @@ class _HalamanAkunState extends State<HalamanAkun> {
             minLines: 2,
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: 'Alamat pengiriman',
               hintText: 'Contoh: Jl. Mawar No. 12, Klojen, Kota Malang',
-              filled: true,
-              fillColor: TemaWarna.abuMuda,
-              labelStyle: const TextStyle(
-                fontSize: 13,
-                color: TemaWarna.teksSekunder,
-              ),
-              hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: TemaWarna.garisAbu),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: TemaWarna.garisAbu),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: TemaWarna.cokelatUtama,
-                  width: 1.5,
-                ),
-              ),
             ),
             onChanged: _saatAlamatDiubah,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _sedangAmbilLokasi ? null : _ambilLokasiPerangkat,
             icon: _sedangAmbilLokasi
@@ -597,8 +819,6 @@ class _HalamanAkunState extends State<HalamanAkun> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Peta inline di bawah alamat pengiriman (Leaflet/OpenStreetMap).
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
@@ -608,25 +828,17 @@ class _HalamanAkunState extends State<HalamanAkun> {
                 options: MapOptions(
                   initialCenter: const LatLng(-7.9666, 112.6326),
                   initialZoom: 14,
-                  // Ketuk peta → titik itu dijadikan alamat pengiriman.
-                  onTap: (posisi, titik) => _saatPetaDiklik(titik),
+                  onTap: (_, titik) => _saatPetaDiklik(titik),
                   onMapReady: () {
                     _petaSiap = true;
                     final target = _targetPeta;
-                    if (target != null) {
-                      try {
-                        _mapController.move(target, 16);
-                      } catch (_) {
-                        // Peta belum benar-benar siap; biarkan apa adanya.
-                      }
-                    }
+                    if (target != null) _geserPetaKe(target);
                   },
                 ),
                 children: [
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    // Cadangan bila tile utama gagal/rate-limit.
                     fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.makanyuk',
                   ),
@@ -652,7 +864,7 @@ class _HalamanAkunState extends State<HalamanAkun> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Ketuk titik mana pun di peta untuk memilih alamat, ketik alamat manual agar peta mengikuti, atau ambil alamat otomatis dari lokasi perangkat.',
+            'Ketik alamat, ambil lokasi otomatis, atau ketuk peta untuk memilih titik.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
@@ -660,21 +872,390 @@ class _HalamanAkunState extends State<HalamanAkun> {
     );
   }
 
-  Widget _menu({
+  Widget _kartuIdentitas(ProfilPelanggan profil) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: TemaWarna.kremLembut, width: 1.2),
+      ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: TemaWarna.kremLembut,
+                  border: Border.all(
+                    color: TemaWarna.cokelatKaramel,
+                    width: 1.6,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.person_rounded,
+                  size: 38,
+                  color: TemaWarna.cokelatPekat,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      profil.nama,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: TemaWarna.cokelatPekat,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      profil.phone?.trim().isNotEmpty == true
+                          ? '${profil.phone} • ${profil.email ?? ''}'
+                          : (profil.email ?? 'Nomor WhatsApp belum diisi'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: TemaWarna.teksSekunder,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: _ubahProfil,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: TemaWarna.garisAbu),
+                  ),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    size: 17,
+                    color: TemaWarna.cokelatPekat,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFDF8F3),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: TemaWarna.kremLembut),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: TemaWarna.cokelatPekat,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.confirmation_number_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Voucher Saya',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: TemaWarna.teksSekunder,
+                              ),
+                            ),
+                            Text(
+                              '${profil.voucherAktif} Voucher',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: TemaWarna.cokelatPekat,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 38, color: TemaWarna.kremLembut),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: TemaWarna.kremLembut,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.star_rounded,
+                          size: 21,
+                          color: TemaWarna.cokelatKaramel,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Poin Reward',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: TemaWarna.teksSekunder,
+                              ),
+                            ),
+                            Text(
+                              '${_formatAngka(profil.poin)} Pts',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: TemaWarna.cokelatPekat,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: TemaWarna.cokelatPekat,
+                side: const BorderSide(color: TemaWarna.cokelatKaramel),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: _bukaPromo,
+              child: const Text(
+                'Tukar Poin & Lihat Promo',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _kartuMenu(ProfilPelanggan profil) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: TemaWarna.kremLembut, width: 1.2),
+      ),
+      child: Column(
+        children: [
+          _barisMenu(
+            ikon: Icons.location_on_outlined,
+            judul: 'Alamat Pengiriman',
+            keterangan: _alamat?.trim().isNotEmpty == true
+                ? _alamat!
+                : 'Belum ada alamat tersimpan',
+            saatDitekan: _pilihAlamat,
+          ),
+          _garis(),
+          _barisMenu(
+            ikon: Icons.credit_card_rounded,
+            judul: 'Metode Pembayaran',
+            keterangan: 'QRIS, GoPay, DANA, OVO, Transfer Bank',
+            saatDitekan: _tampilkanMetodePembayaran,
+          ),
+          _garis(),
+          _barisMenu(
+            ikon: Icons.receipt_long_outlined,
+            judul: 'Riwayat Pesanan',
+            keterangan: 'Daftar transaksi dan tagihan',
+            saatDitekan: widget.saatBukaRiwayat,
+          ),
+          _garis(),
+          _barisMenu(
+            ikon: Icons.confirmation_number_outlined,
+            judul: 'Voucher & Promo',
+            keterangan: profil.voucherAktif > 0
+                ? '${profil.voucherAktif} voucher siap dipakai'
+                : 'Klaim kode atau tukar poin',
+            lencana: profil.voucherAktif > 0 ? '${profil.voucherAktif}' : null,
+            saatDitekan: _bukaPromo,
+          ),
+          _garis(),
+          _barisMenu(
+            ikon: Icons.support_agent_rounded,
+            judul: 'Pusat Bantuan',
+            keterangan: profil.pesanBelumDibaca > 0
+                ? '${profil.pesanBelumDibaca} balasan CS belum dibaca'
+                : 'Hubungi CS',
+            lencana: profil.pesanBelumDibaca > 0
+                ? '${profil.pesanBelumDibaca}'
+                : null,
+            saatDitekan: _bukaBantuan,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _garis() {
+    return const Divider(
+      height: 1,
+      thickness: 1,
+      indent: 64,
+      endIndent: 16,
+      color: Color(0xFFF6EEE5),
+    );
+  }
+
+  Widget _barisMenu({
     required IconData ikon,
     required String judul,
     required String keterangan,
     required VoidCallback saatDitekan,
+    String? lencana,
   }) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: TemaWarna.kremTua,
-        child: Icon(ikon, color: TemaWarna.cokelatUtama),
-      ),
-      title: Text(judul, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: Text(keterangan),
-      trailing: const Icon(Icons.chevron_right_rounded),
+    return InkWell(
       onTap: saatDitekan,
+      borderRadius: BorderRadius.circular(22),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: TemaWarna.kremLembut,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(ikon, size: 21, color: TemaWarna.cokelatPekat),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    judul,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: TemaWarna.cokelatPekat,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    keterangan,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: TemaWarna.teksSekunder,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (lencana != null)
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: TemaWarna.cokelatPekat,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  lencana,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: TemaWarna.teksSekunder,
+              ),
+          ],
+        ),
+      ),
     );
   }
+
+  Widget _tombolKeluar() {
+    return SizedBox(
+      height: 50,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          backgroundColor: const Color(0xFFFFF5F5),
+          foregroundColor: TemaWarna.merahHabis,
+          side: const BorderSide(color: Color(0xFFF3B6B6)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        onPressed: _keluar,
+        icon: const Icon(Icons.logout_rounded, size: 19),
+        label: const Text(
+          'Keluar dari Akun',
+          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatAngka(int nilai) {
+  final teks = nilai.abs().toString();
+  final hasil = StringBuffer();
+
+  for (var i = 0; i < teks.length; i++) {
+    if (i > 0 && (teks.length - i) % 3 == 0) {
+      hasil.write('.');
+    }
+    hasil.write(teks[i]);
+  }
+
+  return hasil.toString();
 }

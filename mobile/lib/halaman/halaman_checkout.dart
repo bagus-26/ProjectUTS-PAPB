@@ -1,21 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../layanan/layanan_geocoding.dart';
 import '../layanan/layanan_lokasi.dart';
-
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-
 import '../model/isi_keranjang.dart';
+import '../model/katalog_promo.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
 import '../model/pesanan.dart';
 import '../model/ringkasan_keranjang.dart';
+import '../model/voucher_pelanggan.dart';
 import '../umum/keadaan_muat.dart';
 import '../umum/tema_warna.dart';
 import '../umum/format_rupiah.dart';
@@ -25,6 +25,7 @@ import '../widget/tampilan_kosong.dart';
 import '../widget/tampilan_muat.dart';
 import '../widget/tombol_utama.dart';
 import 'halaman_detail_pesanan.dart';
+import 'halaman_promo.dart';
 
 /// Halaman Checkout (Kelompok 1: MakanYuk!)
 ///
@@ -43,12 +44,25 @@ class HalamanCheckout extends StatefulWidget {
   State<HalamanCheckout> createState() => _HalamanCheckoutState();
 }
 
-class _HalamanCheckoutState extends State<HalamanCheckout>
-    with SingleTickerProviderStateMixin {
+class _HalamanCheckoutState extends State<HalamanCheckout> {
   final LayananApi _layanan = LayananApi();
   final GlobalKey<FormState> _kunciForm = GlobalKey<FormState>();
   final TextEditingController _namaController = TextEditingController();
-  final TextEditingController _alamatController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _regionController = TextEditingController();
+  final TextEditingController _streetController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+
+  /// Label alamat ala Shopee: Rumah, Kantor, Kampus, atau Lainnya.
+  String _labelAlamat = 'Rumah';
+
+  /// Koordinat opsional dari tombol "Gunakan lokasi saya".
+  double? _latitude;
+  double? _longitude;
+
+  /// Voucher aktif milik pelanggan (`GET /promos`) untuk pemilih di checkout.
+  List<VoucherPelanggan> _voucherAktif = [];
+  int? _voucherTerpilihId;
 
   /// Kunci idempoten dibuat **sekali per kunjungan** halaman (PRD 7.4).
   /// Tombol coba lagi setelah galat sambungan/timeout memakai kunci yang sama,
@@ -74,27 +88,12 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
   final ValueNotifier<String> _statusLokasi = ValueNotifier<String>(
     'Peta lokasi pengiriman',
   );
-
-  /// Geocoding OpenStreetMap: koordinat → alamat (otomatis) dan
-  /// alamat → koordinat (manual, peta mengikuti ketikan).
   final LayananGeocoding _geocoding = const LayananGeocoding();
-
-  /// Jeda debounce ketikan manual; Nominatim membatasi ±1 permintaan/detik.
   Timer? _jedaGeocoding;
   int _urutanGeocoding = 0;
-
-  /// Titik pin di peta inline; `null` selama lokasi belum pernah diambil.
-  LatLng? _titikPeta;
-
-  /// Peta baru bisa digerakkan setelah widget-nya terpasang; bila belum,
-  /// target disimpan dulu di [_targetPeta] lalu diterapkan saat peta siap.
   bool _petaSiap = false;
+  LatLng? _titikPeta;
   LatLng? _targetPeta;
-
-  /// Kontroler animasi kamera. `MapController.move()` di flutter_map tidak
-  /// beranimasi (langsung loncat), jadi kamera di-tween tiap frame supaya
-  /// peta bergeser halus ke lokasi pengguna.
-  AnimationController? _animasiKamera;
   bool _sedangSegarkanRingkasan = false;
 
   /// Pesan galat 422 per kolom (PRD 7.3) untuk ditampilkan di bawah input.
@@ -118,24 +117,29 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     LayananLokasi.namaPenerimaNotifier.removeListener(_padaNamaGlobalBerubah);
     _jedaGeocoding?.cancel();
     _namaController.dispose();
-    _alamatController.dispose();
-    _animasiKamera?.dispose();
-    _animasiKamera = null;
+    _phoneController.dispose();
+    _regionController.dispose();
+    _streetController.dispose();
+    _noteController.dispose();
+    _statusLokasi.dispose();
     super.dispose();
   }
 
   void _padaAlamatGlobalBerubah() {
     if (!mounted) return;
     final alamat = LayananLokasi.alamatPengirimanPilihan;
-    if (alamat != null && _alamatController.text != alamat) {
-      setState(() {
-        _alamatController.text = alamat;
-      });
-      if (alamat.length >= 10) {
-        _jedaGeocoding?.cancel();
-        final urutan = ++_urutanGeocoding;
-        unawaited(_cariAlamatDiPeta(alamat, urutan));
-      }
+    final alamatTerkini = alamat ?? '';
+    if (_streetController.text == alamatTerkini) return;
+    setState(() {
+      _streetController.text = alamatTerkini;
+      _latitude = null;
+      _longitude = null;
+      _titikPeta = null;
+    });
+    if (alamatTerkini.trim().length >= 10) {
+      _jedaGeocoding?.cancel();
+      final urutan = ++_urutanGeocoding;
+      unawaited(_cariAlamatDiPeta(alamatTerkini.trim(), urutan));
     }
   }
 
@@ -143,9 +147,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     if (!mounted) return;
     final nama = LayananLokasi.namaPenerimaPilihan;
     if (nama != null && _namaController.text != nama) {
-      setState(() {
-        _namaController.text = nama;
-      });
+      setState(() => _namaController.text = nama);
     }
   }
 
@@ -162,36 +164,70 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
       final kurir = await _layanan.ambilKurir();
       final metode = await _layanan.ambilMetodePembayaran();
       final riwayat = await _layanan.ambilDaftarPesanan();
+
+      // Voucher bersifat opsional: kegagalan memuat promo tidak boleh
+      // menghalangi pelanggan menyelesaikan checkout.
+      KatalogPromo? katalog;
+      try {
+        katalog = await _layanan.ambilKatalogPromo();
+      } catch (_) {
+        katalog = null;
+      }
+
       if (!mounted) return;
 
       setState(() {
+        final alamatPilihan = LayananLokasi.alamatPengirimanPilihan;
+
         if (riwayat.isNotEmpty) {
           final pesananTerakhir = riwayat.first;
+
           if (_namaController.text.isEmpty) {
-            _namaController.text =
-                LayananLokasi.namaPenerimaPilihan ??
-                pesananTerakhir.namaPenerima;
+            _namaController.text = pesananTerakhir.namaPenerima;
           }
-          if (_alamatController.text.isEmpty) {
-            _alamatController.text =
-                LayananLokasi.alamatPengirimanPilihan ??
+          if (_phoneController.text.isEmpty) {
+            _phoneController.text = pesananTerakhir.phone ?? '';
+          }
+          if (_regionController.text.isEmpty) {
+            _regionController.text = pesananTerakhir.region ?? '';
+          }
+          if (_streetController.text.isEmpty) {
+            _streetController.text =
+                alamatPilihan ??
+                pesananTerakhir.streetAddress ??
                 pesananTerakhir.alamatPenerima;
           }
-        } else {
-          if (_namaController.text.isEmpty) {
-            _namaController.text = LayananLokasi.namaPenerimaPilihan ?? '';
+
+          final labelTerakhir = pesananTerakhir.label?.trim();
+          if (labelTerakhir != null &&
+              const [
+                'Rumah',
+                'Kantor',
+                'Kampus',
+                'Lainnya',
+              ].contains(labelTerakhir)) {
+            _labelAlamat = labelTerakhir;
           }
-          if (_alamatController.text.isEmpty) {
-            _alamatController.text =
-                LayananLokasi.alamatPengirimanPilihan ?? '';
-          }
+
+          _latitude ??= pesananTerakhir.latitude;
+          _longitude ??= pesananTerakhir.longitude;
+        } else if (_streetController.text.isEmpty && alamatPilihan != null) {
+          _streetController.text = alamatPilihan;
         }
+
         if (_namaController.text.isNotEmpty) {
           LayananLokasi.namaPenerimaPilihan ??= _namaController.text;
         }
-        if (_alamatController.text.isNotEmpty) {
-          LayananLokasi.alamatPengirimanPilihan ??= _alamatController.text;
+        if (_streetController.text.isNotEmpty) {
+          LayananLokasi.alamatPengirimanPilihan ??= _streetController.text;
         }
+
+        _voucherAktif = katalog?.voucherAktif ?? [];
+        if (_voucherTerpilihId != null &&
+            !_voucherAktif.any((item) => item.id == _voucherTerpilihId)) {
+          _voucherTerpilihId = null;
+        }
+
         _daftarKurir = kurir.where((item) => item.aktif).toList();
         _daftarMetode = metode.where((item) => item.aktif).toList();
         if (_kurirTerpilihId == null && _daftarKurir.isNotEmpty) {
@@ -209,12 +245,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
         _keranjang = isi;
         _keadaan = isi.kosong ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
       });
-
-      // Peta langsung menampilkan lokasi alamat yang sudah tersimpan,
-      // sehingga pin mengikuti alamat sejak halaman dibuka.
-      final alamatAwal = _alamatController.text.trim();
+      final alamatAwal = _streetController.text.trim();
       if (alamatAwal.length >= 10) {
-        _jedaGeocoding?.cancel();
         final urutan = ++_urutanGeocoding;
         unawaited(_cariAlamatDiPeta(alamatAwal, urutan));
       }
@@ -260,30 +292,24 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
 
   Future<void> _ambilLokasi() async {
     if (_sedangAmbilLokasi) return;
-
-    // Pencarian manual yang masih tertunda dibatalkan agar tidak menimpa
-    // hasil lokasi perangkat.
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
-
     setState(() => _sedangAmbilLokasi = true);
     _statusLokasi.value = 'Mengambil lokasi perangkat...';
 
     try {
-      final layanan = const LayananLokasi();
-      final posisi = await layanan.ambilPosisiSaatIni();
-      if (!mounted) return;
-
-      final titik = LatLng(posisi.latitude, posisi.longitude);
-      setState(() => _titikPeta = titik);
-      _statusLokasi.value = 'Mencari alamat dari lokasi perangkat...';
-
-      // Animasi geser kamera + munculkan pin penanda.
-      await _geserPetaKe(titik, 16);
+      final posisi = await const LayananLokasi().ambilPosisiSaatIni();
       if (!mounted || urutan != _urutanGeocoding) return;
 
-      // Mode otomatis: isi kolom alamat dengan alamat terbaca, bukan
-      // koordinat mentah perangkat.
+      final titik = LatLng(posisi.latitude, posisi.longitude);
+      setState(() {
+        _titikPeta = titik;
+        _latitude = titik.latitude;
+        _longitude = titik.longitude;
+      });
+      _geserPetaKe(titik);
+      _statusLokasi.value = 'Mencari alamat dari lokasi perangkat...';
+
       final hasil = await _geocoding.balikArah(
         lintang: titik.latitude,
         bujur: titik.longitude,
@@ -292,25 +318,24 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
 
       final alamat =
           hasil?.alamat ??
-          'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, '
-              '${posisi.longitude.toStringAsFixed(6)}';
+          'Lokasi perangkat: ${titik.latitude.toStringAsFixed(6)}, '
+              '${titik.longitude.toStringAsFixed(6)}';
       setState(() {
-        _alamatController.text = alamat;
+        _streetController.text = alamat;
         LayananLokasi.alamatPengirimanPilihan = alamat;
       });
-      _statusLokasi.value = hasil != null
-          ? 'Alamat diambil dari lokasi perangkat'
-          : 'Layanan alamat tidak terjangkau; koordinat perangkat ditampilkan. Coba lagi.';
+      _statusLokasi.value = hasil == null
+          ? 'Alamat tidak ditemukan; koordinat perangkat ditampilkan.'
+          : 'Alamat diambil dari lokasi perangkat';
       _bersihkanGalatKolom();
     } on LayananLokasiException catch (galat) {
       if (mounted) {
         _statusLokasi.value = galat.pesan;
         tampilkanGalat(context, GalatApi.umum(galat.pesan));
       }
-    } catch (e) {
+    } catch (error) {
       if (mounted) {
-        final pesan =
-            'Lokasi gagal diambil ($e). Pastikan GPS aktif atau ketuk langsung di peta.';
+        final pesan = 'Lokasi gagal diambil ($error). Coba lagi.';
         _statusLokasi.value = pesan;
         tampilkanGalat(context, GalatApi.umum(pesan));
       }
@@ -321,127 +346,86 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
 
   void _saatNamaDiubah(String nilai) {
     _bersihkanGalatKolom();
-    final teks = nilai.trim();
-    LayananLokasi.namaPenerimaPilihan = teks.isEmpty ? null : teks;
+    final nama = nilai.trim();
+    LayananLokasi.namaPenerimaPilihan = nama.isEmpty ? null : nama;
   }
 
-  /// Mode manual: tiap ketikan di-debounce lalu di-geocode, sehingga peta
-  /// mengikuti alamat yang sedang diketik.
   void _saatAlamatDiubah(String nilai) {
     _bersihkanGalatKolom();
-    final teks = nilai.trim();
-    LayananLokasi.alamatPengirimanPilihan = teks.isEmpty ? null : teks;
-
+    final alamat = nilai.trim();
+    LayananLokasi.alamatPengirimanPilihan = alamat.isEmpty ? null : alamat;
+    setState(() {
+      _latitude = null;
+      _longitude = null;
+      _titikPeta = null;
+    });
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
-
-    if (teks.length < 10) {
+    if (alamat.length < 10) {
       _statusLokasi.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
       return;
     }
-
-    _jedaGeocoding = Timer(
-      const Duration(milliseconds: 900),
-      () => _cariAlamatDiPeta(teks, urutan),
-    );
+    _jedaGeocoding = Timer(const Duration(milliseconds: 900), () {
+      unawaited(_cariAlamatDiPeta(alamat, urutan));
+    });
   }
 
-  Future<void> _cariAlamatDiPeta(String teks, int urutan) async {
-    _statusLokasi.value = 'Mencari lokasi alamat di peta...';
-    final hasil = await _geocoding.cariAlamat(teks);
+  Future<void> _cariAlamatDiPeta(String alamat, int urutan) async {
+    _statusLokasi.value = 'Mencari alamat di peta...';
+    final hasil = await _geocoding.cariAlamat(alamat);
     if (!mounted || urutan != _urutanGeocoding) return;
-
     if (hasil == null) {
-      _statusLokasi.value = 'Alamat belum ditemukan di peta (atau layanan alamat tidak terjangkau). Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
+      _statusLokasi.value =
+          'Alamat belum ditemukan atau layanan alamat tidak terjangkau.';
       return;
     }
-
     final titik = LatLng(hasil.lintang, hasil.bujur);
-    setState(() => _titikPeta = titik);
+    setState(() {
+      _titikPeta = titik;
+      _latitude = titik.latitude;
+      _longitude = titik.longitude;
+    });
+    _geserPetaKe(titik);
     _statusLokasi.value = 'Peta menampilkan: ${hasil.alamat}';
-    await _geserPetaKe(titik, 16);
   }
 
-  /// Mode **ketuk peta**: titik yang dipilih pengguna di-reverse geocode
-  /// menjadi alamat, lalu alamat itu mengisi kolom alamat penerima.
   Future<void> _saatPetaDiklik(LatLng titik) async {
-    // Ketikan manual yang masih tertunda dibatalkan agar tidak menimpa
-    // hasil pilihan dari peta.
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
-
-    // Pin pindah dulu supaya pengguna langsung melihat titik pilihannya,
-    // kamera tidak digeser karena titiknya memang sudah di layar.
-    setState(() => _titikPeta = titik);
-    _statusLokasi.value = 'Membaca alamat titik yang dipilih di peta...';
+    setState(() {
+      _titikPeta = titik;
+      _latitude = titik.latitude;
+      _longitude = titik.longitude;
+    });
+    _statusLokasi.value = 'Membaca alamat titik yang dipilih...';
 
     final hasil = await _geocoding.balikArah(
       lintang: titik.latitude,
       bujur: titik.longitude,
     );
     if (!mounted || urutan != _urutanGeocoding) return;
-
     if (hasil == null) {
-      _statusLokasi.value = 'Alamat titik ini belum terbaca (layanan alamat tidak terjangkau). Ketuk lagi, atau tulis manual.';
+      _statusLokasi.value =
+          'Alamat titik belum terbaca. Coba lagi atau tulis manual.';
       return;
     }
-
     setState(() {
-      _alamatController.text = hasil.alamat;
+      _streetController.text = hasil.alamat;
       LayananLokasi.alamatPengirimanPilihan = hasil.alamat;
     });
     _bersihkanGalatKolom();
     _statusLokasi.value = 'Alamat dari titik yang dipilih di peta';
   }
 
-  /// Menggeser kamera peta ke [tujuan] dengan animasi (ease-out ±700 ms).
-  ///
-  /// flutter_map hanya menyediakan `move()` yang langsung loncat, jadi
-  /// animasinya dibuat sendiri: tiap frame center dan zoom diinterpolasi
-  /// lalu dipanggilkan ke `MapController.move()`.
-  Future<void> _geserPetaKe(LatLng tujuan, double zoom) async {
-    _targetPeta = tujuan;
-    if (!_petaSiap) return; // peta belum terpasang; tunggu `onMapReady`.
-    _animasiKamera?.dispose();
-    final animasi = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _animasiKamera = animasi;
-
-    late final LatLng awal;
-    late final double zoomAwal;
-    try {
-      awal = _mapController.camera.center;
-      zoomAwal = _mapController.camera.zoom;
-    } catch (_) {
-      // Peta sedang tidak terpasang (mis. keluar viewport) — lewati animasi;
-      // targetnya diterapkan lewat `onMapReady`.
-      if (identical(_animasiKamera, animasi)) _animasiKamera = null;
-      animasi.dispose();
+  void _geserPetaKe(LatLng titik) {
+    if (!_petaSiap) {
+      _targetPeta = titik;
       return;
     }
-
-    animasi.addListener(() {
-      if (!mounted) return;
-      final t = Curves.easeOutCubic.transform(animasi.value);
-      try {
-        _mapController.move(
-          LatLng(
-            awal.latitude + (tujuan.latitude - awal.latitude) * t,
-            awal.longitude + (tujuan.longitude - awal.longitude) * t,
-          ),
-          zoomAwal + (zoom - zoomAwal) * t,
-        );
-      } catch (_) {
-        // Peta terlepas saat animasi berjalan; abaikan.
-      }
-    });
-
-    await animasi.forward();
-    if (identical(_animasiKamera, animasi)) {
-      _animasiKamera = null;
-      animasi.dispose();
+    try {
+      _mapController.move(titik, 16);
+    } catch (_) {
+      _targetPeta = titik;
     }
   }
 
@@ -466,17 +450,32 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     });
 
     try {
+      final nama = _namaController.text.trim();
+      final phone = _phoneController.text.trim();
+      final region = _regionController.text.trim();
+      final street = _streetController.text.trim();
+      final catatan = _noteController.text.trim();
+      final alamatLengkap = region.isEmpty ? street : '$street, $region';
+
       final Pesanan pesanan = await _layanan.buatCheckout(
-        namaPenerima: _namaController.text.trim(),
-        alamatPenerima: _alamatController.text.trim(),
+        namaPenerima: nama,
+        alamatPenerima: alamatLengkap,
         kurirId: _kurirTerpilihId!,
         metodePembayaran: _metodeTerpilih!,
         kunciIdempoten: _kunciIdempoten,
+        phone: phone,
+        region: region,
+        streetAddress: street,
+        detailNote: catatan,
+        label: _labelAlamat,
+        latitude: _latitude,
+        longitude: _longitude,
+        voucherId: _voucherTerpilihId,
       );
 
       if (!mounted) return;
-      LayananLokasi.alamatPengirimanPilihan = _alamatController.text.trim();
-      LayananLokasi.namaPenerimaPilihan = _namaController.text.trim();
+      LayananLokasi.alamatPengirimanPilihan = street;
+      LayananLokasi.namaPenerimaPilihan = nama;
 
       // 201 → Rincian Pesanan dengan tumpukan dibersihkan (PRD 7.1)
       Navigator.of(context).pushReplacement(
@@ -583,12 +582,17 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
 
           const SizedBox(height: 14),
 
-          // 4. Isi keranjang (data server)
+          // 4. Voucher aktif milik pelanggan (opsional)
+          _kartuVoucher(),
+
+          const SizedBox(height: 14),
+
+          // 5. Isi keranjang (data server)
           _kartuItem(isi),
 
           const SizedBox(height: 14),
 
-          // 5. Rincian pembayaran dari `ringkasan` server
+          // 6. Rincian pembayaran dari `ringkasan` server
           _kartuRincian(ringkasan),
         ],
       ),
@@ -668,13 +672,50 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             ],
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final label in const [
+                'Rumah',
+                'Kantor',
+                'Kampus',
+                'Lainnya',
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _labelAlamat == label,
+                  showCheckmark: false,
+                  selectedColor: TemaWarna.kremLembut,
+                  backgroundColor: TemaWarna.abuMuda,
+                  side: BorderSide(
+                    color: _labelAlamat == label
+                        ? TemaWarna.cokelatKaramel
+                        : TemaWarna.garisAbu,
+                  ),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _labelAlamat == label
+                        ? TemaWarna.cokelatPekat
+                        : TemaWarna.teksSekunder,
+                  ),
+                  onSelected: _sedangKirim
+                      ? null
+                      : (_) => setState(() => _labelAlamat = label),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _namaController,
             textInputAction: TextInputAction.next,
             enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.words,
             decoration: _dekorasiInput(
               label: 'Nama Penerima',
               hint: 'Contoh: Budi Santoso',
+              kunci: 'nama_penerima',
             ),
             validator: (nilai) {
               final teks = nilai?.trim() ?? '';
@@ -686,16 +727,61 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
           ),
           const SizedBox(height: 12),
           TextFormField(
-            controller: _alamatController,
-            maxLines: 3,
+            controller: _phoneController,
+            keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.next,
             enabled: !_sedangKirim,
+            maxLength: 20,
             decoration: _dekorasiInput(
-              label: 'Alamat Pengiriman',
-              hint: 'Contoh: Jl. Mawar No. 12, Klojen, Kota Malang',
-            ),
+              label: 'Nomor WhatsApp',
+              hint: 'Contoh: 081234567890',
+              kunci: 'phone',
+            ).copyWith(counterText: ''),
             validator: (nilai) {
               final teks = nilai?.trim() ?? '';
-              if (teks.isEmpty) return 'Alamat pengiriman wajib diisi';
+              final digit = teks.replaceAll(RegExp(r'\D'), '');
+              if (teks.isEmpty) return 'Nomor WhatsApp wajib diisi';
+              if (digit.length < 9 || digit.length > 15) {
+                return 'Nomor WhatsApp tidak valid';
+              }
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _regionController,
+            textInputAction: TextInputAction.next,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.words,
+            maxLength: 60,
+            decoration: _dekorasiInput(
+              label: 'Kota / Kecamatan',
+              hint: 'Contoh: Lowokwaru, Kota Malang',
+              kunci: 'region',
+            ).copyWith(counterText: ''),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Kota/kecamatan wajib diisi';
+              return null;
+            },
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _streetController,
+            maxLines: 3,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: 180,
+            decoration: _dekorasiInput(
+              label: 'Alamat Lengkap',
+              hint: 'Contoh: Jl. Mawar No. 12, RT 02/RW 03',
+              kunci: 'street_address',
+            ).copyWith(counterText: ''),
+            validator: (nilai) {
+              final teks = nilai?.trim() ?? '';
+              if (teks.isEmpty) return 'Alamat lengkap wajib diisi';
               if (teks.length < 10) {
                 return 'Alamat terlalu pendek, tuliskan detail alamat';
               }
@@ -703,25 +789,56 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             },
             onChanged: _saatAlamatDiubah,
           ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
-            icon: _sedangAmbilLokasi
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location_rounded),
-            label: Text(
-              _sedangAmbilLokasi
-                  ? 'Mengambil lokasi...'
-                  : 'Ambil lokasi otomatis',
-            ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _noteController,
+            maxLines: 2,
+            enabled: !_sedangKirim,
+            textCapitalization: TextCapitalization.sentences,
+            maxLength: 200,
+            decoration: _dekorasiInput(
+              label: 'Patokan (opsional)',
+              hint: 'Contoh: Pagar hitam, sebelah warung kopi',
+              kunci: 'detail_note',
+            ).copyWith(counterText: ''),
+            onChanged: (_) => _bersihkanGalatKolom(),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _sedangKirim || _sedangAmbilLokasi
+                    ? null
+                    : _ambilLokasi,
+                icon: _sedangAmbilLokasi
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location_rounded, size: 18),
+                label: Text(
+                  _sedangAmbilLokasi
+                      ? 'Mengambil lokasi...'
+                      : 'Gunakan lokasi saya',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_latitude != null && _longitude != null)
+                Expanded(
+                  child: Text(
+                    'Koordinat tersimpan (${_latitude!.toStringAsFixed(4)}, '
+                    '${_longitude!.toStringAsFixed(4)})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: TemaWarna.hijauBuka,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
-
-          // Status pengambilan lokasi (nilai awal, memuat, atau koordinat).
           ValueListenableBuilder<String>(
             valueListenable: _statusLokasi,
             builder: (context, teks, _) => Text(
@@ -734,8 +851,6 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             ),
           ),
           const SizedBox(height: 8),
-
-          // Peta inline di bawah box alamat (Leaflet/OpenStreetMap, tanpa API key).
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
@@ -745,25 +860,17 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
                 options: MapOptions(
                   initialCenter: const LatLng(-7.9666, 112.6326),
                   initialZoom: 14,
-                  // Ketuk peta → titik itu dijadikan alamat penerima.
-                  onTap: (posisi, titik) => _saatPetaDiklik(titik),
+                  onTap: (_, titik) => _saatPetaDiklik(titik),
                   onMapReady: () {
                     _petaSiap = true;
                     final target = _targetPeta;
-                    if (target != null) {
-                      try {
-                        _mapController.move(target, 16);
-                      } catch (_) {
-                        // Peta belum benar-benar siap; biarkan apa adanya.
-                      }
-                    }
+                    if (target != null) _geserPetaKe(target);
                   },
                 ),
                 children: [
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    // Cadangan bila tile utama gagal/rate-limit.
                     fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.makanyuk',
                   ),
@@ -789,7 +896,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Ketuk titik mana pun di peta untuk memilih alamat, atau ketik alamat agar peta mengikuti. Bisa juga ambil dari lokasi perangkat.',
+            'Ketuk peta untuk memilih titik, ketik alamat untuk menggeser peta, atau gunakan lokasi perangkat.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
@@ -800,12 +907,10 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
   InputDecoration _dekorasiInput({
     required String label,
     required String hint,
+    String? kunci,
   }) {
-    // Pesan galat 422 dari server tampil tepat di bawah kolomnya
-    final galat =
-        _galatPerKolom[label == 'Nama Penerima'
-            ? 'nama_penerima'
-            : 'alamat_penerima'];
+    // Pesan galat 422 dari server tampil tepat di bawah kolomnya.
+    final galat = kunci == null ? null : _galatPerKolom[kunci];
 
     return InputDecoration(
       labelText: label,
@@ -942,6 +1047,218 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     );
   }
 
+  VoucherPelanggan? get _voucherDipilih {
+    if (_voucherTerpilihId == null) return null;
+
+    for (final voucher in _voucherAktif) {
+      if (voucher.id == _voucherTerpilihId) return voucher;
+    }
+
+    return null;
+  }
+
+  /// Pratinjau diskon di klien; nilai final tetap dihitung server.
+  int _diskonPreview(RingkasanKeranjang ringkasan) {
+    final promo = _voucherDipilih?.promo;
+    if (promo == null) return 0;
+
+    return promo.perkiraanDiskon(ringkasan.subtotal);
+  }
+
+  int? _totalPreview(RingkasanKeranjang ringkasan) {
+    final ongkir = ringkasan.ongkosKirim;
+    if (ongkir == null) return null;
+
+    final total = ringkasan.subtotal + ongkir - _diskonPreview(ringkasan);
+
+    return total < 0 ? 0 : total;
+  }
+
+  Future<void> _muatVoucher() async {
+    try {
+      final katalog = await _layanan.ambilKatalogPromo();
+      if (!mounted) return;
+      setState(() {
+        _voucherAktif = katalog.voucherAktif;
+        if (_voucherTerpilihId != null &&
+            !_voucherAktif.any((voucher) => voucher.id == _voucherTerpilihId)) {
+          _voucherTerpilihId = null;
+        }
+      });
+    } catch (_) {
+      // Voucher opsional: checkout tetap berjalan tanpa voucher.
+    }
+  }
+
+  Future<void> _bukaHalamanPromo() async {
+    await Navigator.of(context)
+        .push(MaterialPageRoute(builder: (context) => const HalamanPromo()));
+    if (mounted) await _muatVoucher();
+  }
+
+  Widget _kartuVoucher() {
+    final subtotal = _keranjang?.ringkasan.subtotal ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.confirmation_number_outlined,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Voucher & Promo',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ),
+              TextButton(
+                onPressed: _sedangKirim ? null : _bukaHalamanPromo,
+                child: const Text('Tambah', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          if (_voucherAktif.isEmpty)
+            InkWell(
+              onTap: _sedangKirim ? null : _bukaHalamanPromo,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: TemaWarna.abuMuda,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Belum ada voucher. Klaim kode atau tukar poin di halaman Promo.',
+                  style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
+                ),
+              ),
+            )
+          else ...[
+            _opsiVoucher(
+              id: null,
+              judul: 'Tanpa voucher',
+              keterangan: 'Bayar dengan harga normal',
+              terpilih: _voucherTerpilihId == null,
+              aktif: true,
+            ),
+            for (final voucher in _voucherAktif) ...[
+              const SizedBox(height: 8),
+              _opsiVoucher(
+                id: voucher.id,
+                judul: voucher.promo?.judul ?? 'Voucher MakanYuk!',
+                keterangan: _keteranganVoucher(voucher, subtotal),
+                terpilih: _voucherTerpilihId == voucher.id,
+                aktif: _voucherBolehDipakai(voucher, subtotal),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _voucherBolehDipakai(VoucherPelanggan voucher, int subtotal) {
+    final promo = voucher.promo;
+    if (promo == null) return false;
+
+    return subtotal >= promo.minimalBelanja;
+  }
+
+  String _keteranganVoucher(VoucherPelanggan voucher, int subtotal) {
+    final promo = voucher.promo;
+    if (promo == null) return voucher.labelStatus;
+
+    final potongan = promo.labelDiskon.isNotEmpty
+        ? promo.labelDiskon
+        : promo.labelTipe;
+    final kode = promo.kode.isEmpty ? '' : '${promo.kode} • ';
+
+    if (!_voucherBolehDipakai(voucher, subtotal)) {
+      return '$kode$potongan • Min. ${formatRupiah(promo.minimalBelanja)}';
+    }
+
+    return '$kode$potongan';
+  }
+
+  Widget _opsiVoucher({
+    required int? id,
+    required String judul,
+    required String keterangan,
+    required bool terpilih,
+    required bool aktif,
+  }) {
+    return InkWell(
+      onTap: !aktif || _sedangKirim
+          ? null
+          : () => setState(() => _voucherTerpilihId = id),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: terpilih ? TemaWarna.kremLembut : TemaWarna.abuMuda,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: terpilih ? TemaWarna.cokelatKaramel : TemaWarna.garisAbu,
+            width: terpilih ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              terpilih
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 20,
+              color: aktif
+                  ? (terpilih
+                        ? TemaWarna.cokelatKaramel
+                        : TemaWarna.teksSekunder)
+                  : TemaWarna.garisAbu,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    judul,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: aktif
+                          ? TemaWarna.teksUtama
+                          : TemaWarna.teksSekunder,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    keterangan,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: TemaWarna.teksSekunder,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _kartuItem(IsiKeranjang isi) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1019,6 +1336,12 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             )
           else ...[
             _barisRincian('Subtotal Produk', formatRupiah(ringkasan.subtotal)),
+            if (_diskonPreview(ringkasan) > 0)
+              _barisRincian(
+                'Diskon Voucher',
+                '−${formatRupiah(_diskonPreview(ringkasan))}',
+                warnaNilai: TemaWarna.hijauBuka,
+              ),
             _barisRincian(
               'Biaya Pengiriman',
               ringkasan.ongkosKirim == null
@@ -1028,7 +1351,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             const Divider(height: 20),
             _barisRincian(
               'Total Pembayaran',
-              ringkasan.total == null ? '—' : formatRupiah(ringkasan.total!),
+              _totalPreview(ringkasan) == null
+                  ? '—'
+                  : formatRupiah(_totalPreview(ringkasan)!),
               tebal: true,
             ),
           ],
@@ -1117,9 +1442,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
                   ),
                 ),
                 Text(
-                  ringkasan?.total == null
+                  ringkasan == null || _totalPreview(ringkasan) == null
                       ? '—'
-                      : formatRupiah(ringkasan!.total!),
+                      : formatRupiah(_totalPreview(ringkasan)!),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,

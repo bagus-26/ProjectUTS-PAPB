@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Pesanan;
+use App\Models\SupportMessage;
 use App\Support\StatusPesanan;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\View;
@@ -31,6 +32,14 @@ class AppServiceProvider extends ServiceProvider
             $view->with(
                 'jumlahPerluKonfirmasi',
                 Pesanan::query()->where('status', StatusPesanan::MENUNGGU_KONFIRMASI)->count(),
+            );
+
+            $view->with(
+                'jumlahPesanBelumDibaca',
+                SupportMessage::query()
+                    ->where('sender_role', 'user')
+                    ->where('is_read', false)
+                    ->count(),
             );
         });
     }

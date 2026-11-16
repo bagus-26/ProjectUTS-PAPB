@@ -54,7 +54,7 @@ class PesananController extends Controller
 
     public function show(Pesanan $pesanan): View
     {
-        $pesanan->load(['pelanggan', 'kurir', 'metodePembayaran', 'detail']);
+        $pesanan->load(['pelanggan', 'kurir', 'metodePembayaran', 'detail', 'voucher.promo']);
 
         return view('admin.pesanan.show', [
             'pesanan' => $pesanan,

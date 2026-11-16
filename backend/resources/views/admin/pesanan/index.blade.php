@@ -64,9 +64,24 @@
                             <tr>
                                 <td>
                                     <div class="cell-main">{{ $pesanan->nomor_pesanan }}</div>
-                                    <div class="cell-sub">{{ $pesanan->nama_penerima }}</div>
+                                    <div class="cell-sub">
+                                        {{ $pesanan->nama_penerima }}
+                                        @if ($pesanan->label)
+                                            <span style="font-size: 11px; font-weight: 600; color: var(--brand);">[{{ $pesanan->label }}]</span>
+                                        @endif
+                                        @if ($pesanan->phone)
+                                            · {{ $pesanan->phone }}
+                                        @endif
+                                    </div>
                                 </td>
-                                <td class="nowrap">{{ \App\Support\Uang::rupiah($pesanan->total) }}</td>
+                                <td class="nowrap">
+                                    {{ \App\Support\Uang::rupiah($pesanan->total) }}
+                                    @if ($pesanan->discount_amount > 0)
+                                        <div class="cell-sub" style="color: var(--green); font-size: 11px;">
+                                            Diskon {{ \App\Support\Uang::rupiah($pesanan->discount_amount) }}
+                                        </div>
+                                    @endif
+                                </td>
                                 <td>
                                     <div>{{ $pesanan->metodePembayaran?->nama ?? '-' }}</div>
                                     <div class="cell-sub">Ongkir {{ \App\Support\Uang::rupiah($pesanan->ongkos_kirim) }}</div>

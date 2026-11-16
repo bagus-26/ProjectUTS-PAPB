@@ -22,7 +22,7 @@ class PesananController extends Controller
     public function index(Request $request): JsonResponse
     {
         $pesanan = Pesanan::query()
-            ->with(['kurir', 'metodePembayaran'])
+            ->with(['kurir', 'metodePembayaran', 'voucher.promo'])
             ->where('pelanggan_id', $this->pelangganId($request))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -35,7 +35,7 @@ class PesananController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $pesanan = Pesanan::query()
-            ->with(['kurir', 'metodePembayaran', 'detail'])
+            ->with(['kurir', 'metodePembayaran', 'detail', 'voucher.promo'])
             ->where('pelanggan_id', $this->pelangganId($request))
             ->whereKey($id)
             ->first();
@@ -79,11 +79,32 @@ class PesananController extends Controller
             'metode_pembayaran_id' => $pesanan->metode_pembayaran_id,
             'nama_penerima' => $pesanan->nama_penerima,
             'alamat_penerima' => $pesanan->alamat_penerima,
+            'phone' => $pesanan->phone,
+            'region' => $pesanan->region,
+            'street_address' => $pesanan->street_address,
+            'detail_note' => $pesanan->detail_note,
+            'label' => $pesanan->label,
+            'latitude' => $pesanan->latitude,
+            'longitude' => $pesanan->longitude,
+            'user_voucher_id' => $pesanan->user_voucher_id,
+            'discount_amount' => $pesanan->discount_amount,
+            'poin_diberikan' => $pesanan->poin_diberikan,
             'subtotal' => $pesanan->subtotal,
             'ongkos_kirim' => $pesanan->ongkos_kirim,
             'total' => $pesanan->total,
             'status' => $pesanan->status,
             'pembayaran' => $this->pembayaranService->ringkasan($pesanan),
+            'voucher' => $pesanan->voucher === null ? null : [
+                'id' => $pesanan->voucher->id,
+                'status' => $pesanan->voucher->status,
+                'promo' => $pesanan->voucher->promo === null ? null : [
+                    'id' => $pesanan->voucher->promo->id,
+                    'code' => $pesanan->voucher->promo->code,
+                    'title' => $pesanan->voucher->promo->title,
+                    'discount_type' => $pesanan->voucher->promo->discount_type,
+                    'discount_value' => $pesanan->voucher->promo->discount_value,
+                ],
+            ],
             'metode_pembayaran' => [
                 'kode' => $pesanan->metodePembayaran?->kode,
                 'nama' => $pesanan->metodePembayaran?->nama,

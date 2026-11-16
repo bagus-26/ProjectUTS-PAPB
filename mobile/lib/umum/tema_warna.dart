@@ -12,6 +12,7 @@ class TemaWarna {
   // Warna Latar & Netral
   static const Color latarKrem = Color(0xFFF9F6F0);
   static const Color latarPutih = Colors.white;
+  static const Color latarSangatLembut = Color(0xFFFAFAFA);
   static const Color kremTua = Color(0xFFEFE8DE);
 
   /// Latar banner promo/lembar info (design Figma)
@@ -19,8 +20,19 @@ class TemaWarna {
   static const Color abuMuda = Color(0xFFF5F5F5);
   static const Color garisAbu = Color(0xFFEAEAEA);
 
+  // Palet katalog baru (home.png & "semua menu.png")
+  /// Krem lembut untuk lingkaran kategori, banner promo, dan aksen hangat.
+  static const Color kremLembut = Color(0xFFFBE9D7);
+
+  /// Cokelat karamel untuk teks aksen, harga, dan elemen aktif.
+  static const Color cokelatKaramel = Color(0xFFA8551D);
+
+  /// Cokelat tua untuk judul, tombol tambah, dan teks utama bermerek.
+  static const Color cokelatPekat = Color(0xFF5D3A1A);
+
   // Warna Teks
   static const Color teksUtama = Color(0xFF1E1E1E);
+  static const Color teksGelap = Color(0xFF2D2D2D);
   static const Color teksSekunder = Color(0xFF757575);
   static const Color teksTerang = Colors.white;
 

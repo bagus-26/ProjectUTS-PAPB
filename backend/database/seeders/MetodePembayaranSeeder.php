@@ -13,10 +13,11 @@ class MetodePembayaranSeeder extends Seeder
     public function run(): void
     {
         $metode = [
-            ['kode' => 'xendit_qris', 'nama' => 'QRIS (GoPay, OVO, DANA, ShopeePay)'],
-            ['kode' => 'xendit_ewallet', 'nama' => 'E-Wallet (OVO, DANA, ShopeePay, LinkAja)'],
-            ['kode' => 'xendit_va', 'nama' => 'Virtual Account Bank'],
-            ['kode' => 'xendit_kartu', 'nama' => 'Kartu Kredit / Debit'],
+            ['kode' => 'xendit_qris', 'nama' => 'QRIS'],
+            ['kode' => 'xendit_gopay', 'nama' => 'GoPay'],
+            ['kode' => 'xendit_dana', 'nama' => 'DANA'],
+            ['kode' => 'xendit_ovo', 'nama' => 'OVO'],
+            ['kode' => 'xendit_transfer', 'nama' => 'Transfer Bank'],
         ];
 
         foreach ($metode as $data) {
@@ -25,5 +26,9 @@ class MetodePembayaranSeeder extends Seeder
                 ['nama' => $data['nama'], 'aktif' => true],
             );
         }
+
+        MetodePembayaran::query()
+            ->whereIn('kode', ['xendit_ewallet', 'xendit_va', 'xendit_kartu'])
+            ->update(['aktif' => false]);
     }
 }

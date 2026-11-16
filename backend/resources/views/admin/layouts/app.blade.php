@@ -36,6 +36,15 @@
                 <a class="nav-link {{ request()->routeIs('admin.produk.*') ? 'active' : '' }}" href="{{ route('admin.produk.index') }}">
                     <span class="nav-icon">🍽️</span> Kelola Produk
                 </a>
+                <a class="nav-link {{ request()->routeIs('admin.promo.*') ? 'active' : '' }}" href="{{ route('admin.promo.index') }}">
+                    <span class="nav-icon">🎟️</span> Promo &amp; Voucher
+                </a>
+                <a class="nav-link {{ request()->routeIs('admin.support.*') ? 'active' : '' }}" href="{{ route('admin.support.index') }}">
+                    <span class="nav-icon">💬</span> Pesan CS
+                    @if (($jumlahPesanBelumDibaca ?? 0) > 0)
+                        <span class="nav-badge">{{ $jumlahPesanBelumDibaca }}</span>
+                    @endif
+                </a>
                 <a class="nav-link {{ request()->routeIs('admin.toko.*') ? 'active' : '' }}" href="{{ route('admin.toko.index') }}">
                     <span class="nav-icon">⏱️</span> Jam Kerja
                 </a>
@@ -87,7 +96,7 @@
                     <div class="alert alert-danger">{{ session('galat') }}</div>
                 @endif
 
-                @if ($errors->any())
+                @if (isset($errors) && $errors->any())
                     <div class="alert alert-danger">
                         <strong>Periksa kembali data yang diisi.</strong>
                         <ul>

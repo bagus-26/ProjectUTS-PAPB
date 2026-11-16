@@ -141,6 +141,12 @@
                         <span class="muted">Subtotal</span>
                         <span>{{ \App\Support\Uang::rupiah($pesanan->subtotal) }}</span>
                     </div>
+                    @if ($pesanan->discount_amount > 0)
+                        <div class="total-row">
+                            <span class="muted">Diskon voucher</span>
+                            <span style="color: var(--green);">−{{ \App\Support\Uang::rupiah($pesanan->discount_amount) }}</span>
+                        </div>
+                    @endif
                     <div class="total-row">
                         <span class="muted">Ongkos kirim</span>
                         <span>{{ \App\Support\Uang::rupiah($pesanan->ongkos_kirim) }}</span>
@@ -149,6 +155,12 @@
                         <span>Total</span>
                         <span>{{ \App\Support\Uang::rupiah($pesanan->total) }}</span>
                     </div>
+                    @if ($pesanan->poin_diberikan > 0)
+                        <div class="total-row">
+                            <span class="muted">Poin diberikan</span>
+                            <span>{{ number_format($pesanan->poin_diberikan, 0, ',', '.') }} poin</span>
+                        </div>
+                    @endif
                 </div>
             </section>
         </div>
@@ -162,8 +174,30 @@
                 </div>
                 <div class="info-list">
                     <div class="info-row"><span>Nama</span><strong>{{ $pesanan->nama_penerima }}</strong></div>
+                    <div class="info-row"><span>WhatsApp</span><strong>{{ $pesanan->phone ?: '-' }}</strong></div>
                     <div class="info-row"><span>Pelanggan</span><strong>{{ $pesanan->pelanggan?->nama ?? '-' }}</strong></div>
-                    <div class="info-row"><span>Alamat</span><strong>{{ $pesanan->alamat_penerima }}</strong></div>
+                    <div class="info-row"><span>Label alamat</span><strong>[{{ $pesanan->label ?: 'Alamat' }}]</strong></div>
+                    <div class="info-row">
+                        <span>Alamat</span>
+                        <strong>
+                            {{ $pesanan->street_address ?: $pesanan->alamat_penerima }}
+                            @if ($pesanan->region)
+                                <br>{{ $pesanan->region }}
+                            @endif
+                            @if ($pesanan->detail_note)
+                                <br><span class="cell-sub">Patokan: {{ $pesanan->detail_note }}</span>
+                            @endif
+                        </strong>
+                    </div>
+                    @if ($pesanan->latitude !== null && $pesanan->longitude !== null)
+                        <div class="info-row">
+                            <span>Koordinat</span>
+                            <strong>
+                                <a href="https://www.google.com/maps?q={{ $pesanan->latitude }},{{ $pesanan->longitude }}"
+                                   target="_blank" rel="noopener">Lihat di Google Maps</a>
+                            </strong>
+                        </div>
+                    @endif
                 </div>
             </section>
 
@@ -176,6 +210,8 @@
                 <div class="info-list">
                     <div class="info-row"><span>Metode</span><strong>{{ $pesanan->metodePembayaran?->nama ?? '-' }}</strong></div>
                     <div class="info-row"><span>Kode</span><strong>{{ $pesanan->metodePembayaran?->kode ?? '-' }}</strong></div>
+                    <div class="info-row"><span>Voucher</span><strong>{{ $pesanan->voucher?->promo?->code ?? 'Tanpa voucher' }}</strong></div>
+                    <div class="info-row"><span>Diskon</span><strong>{{ \App\Support\Uang::rupiah($pesanan->discount_amount) }}</strong></div>
                     <div class="info-row"><span>Kurir</span><strong>{{ $pesanan->kurir?->nama ?? '-' }}</strong></div>
                     <div class="info-row"><span>Wilayah</span><strong>{{ $pesanan->kurir?->wilayah ?? '-' }}</strong></div>
                     <div class="info-row"><span>Ongkos kirim</span><strong>{{ \App\Support\Uang::rupiah($pesanan->ongkos_kirim) }}</strong></div>

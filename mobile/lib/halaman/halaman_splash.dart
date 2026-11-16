@@ -58,7 +58,7 @@ class _HalamanSplashState extends State<HalamanSplash>
                 width: 104,
                 height: 104,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: 104,
                   height: 104,
                   decoration: const BoxDecoration(

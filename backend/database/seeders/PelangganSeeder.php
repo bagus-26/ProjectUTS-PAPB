@@ -13,14 +13,26 @@ class PelangganSeeder extends Seeder
     public function run(): void
     {
         $pelanggan = [
-            ['nama' => 'Pelanggan Uji 1', 'token' => 'kelompok1-token-statis'],
-            ['nama' => 'Pelanggan Uji 2', 'token' => 'kelompok1-token-statis-2'],
+            [
+                'nama' => 'Budi Santoso',
+                'phone' => '+62 812-3456-7890',
+                'email' => 'budi.santoso@email.com',
+                'poin' => 1450,
+                'token' => 'kelompok1-token-statis',
+            ],
+            [
+                'nama' => 'Pelanggan Uji 2',
+                'phone' => '+62 813-2222-3333',
+                'email' => 'pelanggan2@makanyuk.test',
+                'poin' => 250,
+                'token' => 'kelompok1-token-statis-2',
+            ],
         ];
 
         foreach ($pelanggan as $data) {
             Pelanggan::query()->updateOrCreate(
                 ['token' => $data['token']],
-                ['nama' => $data['nama']],
+                $data,
             );
         }
     }

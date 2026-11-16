@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 class ProdukService
 {
     /**
+     * Query katalog untuk panel admin: semua menu termasuk yang habis.
+     *
      * @return Builder<Produk>
      */
     public function queryDaftar(?string $kategori = null, ?string $cari = null): Builder
@@ -22,6 +24,18 @@ class ProdukService
             ->when($kategori !== null && $kategori !== '', fn ($query) => $query->where('kategori', $kategori))
             ->when($cari !== null && $cari !== '', fn ($query) => $query->where('nama', 'like', '%'.$cari.'%'))
             ->orderBy('id');
+    }
+
+    /**
+     * Query katalog khusus pelanggan: menu habis atau nonaktif disembunyikan.
+     *
+     * @return Builder<Produk>
+     */
+    public function queryDaftarPelanggan(?string $kategori = null, ?string $cari = null): Builder
+    {
+        return $this->queryDaftar($kategori, $cari)
+            ->where('tersedia', true)
+            ->where('stok', '>', 0);
     }
 
     /**
