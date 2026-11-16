@@ -31,8 +31,9 @@ class _HalamanAkunState extends State<HalamanAkun> {
   final LayananGeocoding _geocoding = const LayananGeocoding();
 
   /// Status peta (memuat, hasil geocoding, atau galat) tampil di atas peta.
-  final ValueNotifier<String> _statusPeta =
-      ValueNotifier<String>('Peta alamat pengiriman');
+  final ValueNotifier<String> _statusPeta = ValueNotifier<String>(
+    'Peta alamat pengiriman',
+  );
 
   bool _sedangAmbilLokasi = false;
 
@@ -49,15 +50,51 @@ class _HalamanAkunState extends State<HalamanAkun> {
   @override
   void initState() {
     super.initState();
+    LayananLokasi.alamatPengirimanNotifier.addListener(
+      _padaAlamatGlobalBerubah,
+    );
+    LayananLokasi.namaPenerimaNotifier.addListener(_padaNamaGlobalBerubah);
     _muatRingkasan();
   }
 
   @override
   void dispose() {
+    LayananLokasi.alamatPengirimanNotifier.removeListener(
+      _padaAlamatGlobalBerubah,
+    );
+    LayananLokasi.namaPenerimaNotifier.removeListener(_padaNamaGlobalBerubah);
     _jedaGeocoding?.cancel();
     _alamatController.dispose();
     _statusPeta.dispose();
     super.dispose();
+  }
+
+  void _padaAlamatGlobalBerubah() {
+    if (!mounted) return;
+    final alamatBaru = LayananLokasi.alamatPengirimanPilihan;
+    if (_alamat != alamatBaru) {
+      setState(() {
+        _alamat = alamatBaru;
+        if (alamatBaru != null && _alamatController.text != alamatBaru) {
+          _alamatController.text = alamatBaru;
+        }
+      });
+      if (alamatBaru != null && alamatBaru.trim().length >= 10) {
+        _jedaGeocoding?.cancel();
+        final urutan = ++_urutanGeocoding;
+        unawaited(_cariAlamatDiPeta(alamatBaru.trim(), urutan));
+      }
+    }
+  }
+
+  void _padaNamaGlobalBerubah() {
+    if (!mounted) return;
+    final namaBaru = LayananLokasi.namaPenerimaPilihan;
+    if (namaBaru != null && _nama != namaBaru) {
+      setState(() {
+        _nama = namaBaru;
+      });
+    }
   }
 
   Future<void> _muatRingkasan() async {
@@ -73,9 +110,12 @@ class _HalamanAkunState extends State<HalamanAkun> {
       setState(() {
         _alamat = LayananLokasi.alamatPengirimanPilihan;
         if (pesananTerakhir != null) {
-          _nama = pesananTerakhir.namaPenerima;
+          _nama =
+              LayananLokasi.namaPenerimaPilihan ?? pesananTerakhir.namaPenerima;
           _alamat ??= pesananTerakhir.alamatPenerima;
         }
+        LayananLokasi.namaPenerimaPilihan ??= _nama;
+        LayananLokasi.alamatPengirimanPilihan ??= _alamat;
         if (_alamatController.text.trim().isEmpty && _alamat != null) {
           _alamatController.text = _alamat!;
         }
@@ -144,11 +184,12 @@ class _HalamanAkunState extends State<HalamanAkun> {
       });
       _statusPeta.value = hasil != null
           ? 'Alamat diambil dari lokasi perangkat'
-          : 'Alamat terdekat tidak ditemukan; koordinat perangkat ditampilkan.';
+          : 'Layanan alamat tidak terjangkau; koordinat perangkat ditampilkan. Coba lagi.';
     } on LayananLokasiException catch (galat) {
       _statusPeta.value = galat.pesan;
-    } catch (_) {
-      _statusPeta.value = 'Lokasi tidak dapat diambil. Coba lagi.';
+    } catch (e) {
+      _statusPeta.value =
+          'Lokasi gagal diambil ($e). Coba lagi atau ketuk titik di peta.';
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
@@ -183,8 +224,7 @@ class _HalamanAkunState extends State<HalamanAkun> {
     if (!mounted || urutan != _urutanGeocoding) return;
 
     if (hasil == null) {
-      _statusPeta.value =
-          'Alamat belum ditemukan di peta. Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
+      _statusPeta.value = 'Alamat belum ditemukan di peta (atau layanan alamat tidak terjangkau). Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
       return;
     }
 
@@ -192,6 +232,38 @@ class _HalamanAkunState extends State<HalamanAkun> {
     setState(() => _titikPeta = titik);
     _geserPetaKe(titik, 16);
     _statusPeta.value = 'Peta menampilkan: ${hasil.alamat}';
+  }
+
+  /// Mode **ketuk peta**: titik yang dipilih pengguna di-reverse geocode
+  /// menjadi alamat, lalu alamat itu mengisi kolom alamat pengiriman.
+  Future<void> _saatPetaDiklik(LatLng titik) async {
+    // Ketikan manual yang masih tertunda dibatalkan agar tidak menimpa
+    // hasil pilihan dari peta.
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+
+    // Pin pindah dulu supaya pengguna langsung melihat titik pilihannya,
+    // kamera tidak digeser karena titiknya memang sudah di layar.
+    setState(() => _titikPeta = titik);
+    _statusPeta.value = 'Membaca alamat titik yang dipilih di peta...';
+
+    final hasil = await _geocoding.balikArah(
+      lintang: titik.latitude,
+      bujur: titik.longitude,
+    );
+    if (!mounted || urutan != _urutanGeocoding) return;
+
+    if (hasil == null) {
+      _statusPeta.value = 'Alamat titik ini belum terbaca (layanan alamat tidak terjangkau). Ketuk lagi, atau tulis manual.';
+      return;
+    }
+
+    setState(() {
+      _alamat = hasil.alamat;
+      _alamatController.text = hasil.alamat;
+      LayananLokasi.alamatPengirimanPilihan = hasil.alamat;
+    });
+    _statusPeta.value = 'Alamat dari titik yang dipilih di peta';
   }
 
   /// Menggerakkan peta ke [titik]; bila peta belum terpasang, targetnya
@@ -249,6 +321,57 @@ class _HalamanAkunState extends State<HalamanAkun> {
       ..showSnackBar(SnackBar(content: Text(pesan)));
   }
 
+  Future<void> _tampilkanDialogUbahNama() async {
+    final controller = TextEditingController(text: _nama);
+    final formKey = GlobalKey<FormState>();
+
+    final hasil = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ubah Nama Pengguna'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Nama Lengkap',
+              hintText: 'Masukkan nama Anda',
+            ),
+            validator: (val) {
+              final teks = val?.trim() ?? '';
+              if (teks.isEmpty) return 'Nama tidak boleh kosong';
+              if (teks.length < 3) return 'Nama terlalu pendek';
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) {
+                Navigator.of(context).pop(controller.text.trim());
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (hasil != null && hasil.isNotEmpty && mounted) {
+      setState(() {
+        _nama = hasil;
+      });
+      LayananLokasi.namaPenerimaPilihan = hasil;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -258,13 +381,6 @@ class _HalamanAkunState extends State<HalamanAkun> {
           'Akun Saya',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [
-          IconButton(
-            onPressed: _muatRingkasan,
-            tooltip: 'Muat ulang akun',
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
       ),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
@@ -315,12 +431,27 @@ class _HalamanAkunState extends State<HalamanAkun> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _nama,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _nama,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _tampilkanDialogUbahNama,
+                          child: const Icon(
+                            Icons.edit_outlined,
+                            size: 18,
+                            color: TemaWarna.cokelatUtama,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -448,7 +579,9 @@ class _HalamanAkunState extends State<HalamanAkun> {
                   )
                 : const Icon(Icons.my_location_rounded),
             label: Text(
-              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi otomatis',
+              _sedangAmbilLokasi
+                  ? 'Mengambil lokasi...'
+                  : 'Ambil lokasi otomatis',
             ),
           ),
           const SizedBox(height: 8),
@@ -475,6 +608,8 @@ class _HalamanAkunState extends State<HalamanAkun> {
                 options: MapOptions(
                   initialCenter: const LatLng(-7.9666, 112.6326),
                   initialZoom: 14,
+                  // Ketuk peta → titik itu dijadikan alamat pengiriman.
+                  onTap: (posisi, titik) => _saatPetaDiklik(titik),
                   onMapReady: () {
                     _petaSiap = true;
                     final target = _targetPeta;
@@ -491,6 +626,8 @@ class _HalamanAkunState extends State<HalamanAkun> {
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    // Cadangan bila tile utama gagal/rate-limit.
+                    fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.makanyuk',
                   ),
                   if (_titikPeta != null)
@@ -515,7 +652,7 @@ class _HalamanAkunState extends State<HalamanAkun> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Ketik alamat manual agar peta mengikuti, atau ambil alamat otomatis dari lokasi perangkat.',
+            'Ketuk titik mana pun di peta untuk memilih alamat, ketik alamat manual agar peta mengikuti, atau ambil alamat otomatis dari lokasi perangkat.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],

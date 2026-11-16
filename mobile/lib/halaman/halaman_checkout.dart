@@ -7,8 +7,10 @@ import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
 import '../layanan/layanan_geocoding.dart';
 import '../layanan/layanan_lokasi.dart';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+
 import '../model/isi_keranjang.dart';
 import '../model/kurir.dart';
 import '../model/metode_pembayaran.dart';
@@ -69,8 +71,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
   bool _sedangKirim = false;
   bool _sedangAmbilLokasi = false;
   final MapController _mapController = MapController();
-  final ValueNotifier<String> _statusLokasi =
-      ValueNotifier<String>('Peta lokasi pengiriman');
+  final ValueNotifier<String> _statusLokasi = ValueNotifier<String>(
+    'Peta lokasi pengiriman',
+  );
 
   /// Geocoding OpenStreetMap: koordinat → alamat (otomatis) dan
   /// alamat → koordinat (manual, peta mengikuti ketikan).
@@ -100,17 +103,50 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
   @override
   void initState() {
     super.initState();
+    LayananLokasi.alamatPengirimanNotifier.addListener(
+      _padaAlamatGlobalBerubah,
+    );
+    LayananLokasi.namaPenerimaNotifier.addListener(_padaNamaGlobalBerubah);
     _muatDataAwal();
   }
 
   @override
   void dispose() {
+    LayananLokasi.alamatPengirimanNotifier.removeListener(
+      _padaAlamatGlobalBerubah,
+    );
+    LayananLokasi.namaPenerimaNotifier.removeListener(_padaNamaGlobalBerubah);
     _jedaGeocoding?.cancel();
     _namaController.dispose();
     _alamatController.dispose();
     _animasiKamera?.dispose();
     _animasiKamera = null;
     super.dispose();
+  }
+
+  void _padaAlamatGlobalBerubah() {
+    if (!mounted) return;
+    final alamat = LayananLokasi.alamatPengirimanPilihan;
+    if (alamat != null && _alamatController.text != alamat) {
+      setState(() {
+        _alamatController.text = alamat;
+      });
+      if (alamat.length >= 10) {
+        _jedaGeocoding?.cancel();
+        final urutan = ++_urutanGeocoding;
+        unawaited(_cariAlamatDiPeta(alamat, urutan));
+      }
+    }
+  }
+
+  void _padaNamaGlobalBerubah() {
+    if (!mounted) return;
+    final nama = LayananLokasi.namaPenerimaPilihan;
+    if (nama != null && _namaController.text != nama) {
+      setState(() {
+        _namaController.text = nama;
+      });
+    }
   }
 
   /// Memuat `GET /kurir`, `GET /metode-pembayaran`, lalu
@@ -132,16 +168,29 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
         if (riwayat.isNotEmpty) {
           final pesananTerakhir = riwayat.first;
           if (_namaController.text.isEmpty) {
-            _namaController.text = pesananTerakhir.namaPenerima;
+            _namaController.text =
+                LayananLokasi.namaPenerimaPilihan ??
+                pesananTerakhir.namaPenerima;
           }
           if (_alamatController.text.isEmpty) {
             _alamatController.text =
                 LayananLokasi.alamatPengirimanPilihan ??
                 pesananTerakhir.alamatPenerima;
           }
-        } else if (_alamatController.text.isEmpty) {
-          _alamatController.text =
-              LayananLokasi.alamatPengirimanPilihan ?? '';
+        } else {
+          if (_namaController.text.isEmpty) {
+            _namaController.text = LayananLokasi.namaPenerimaPilihan ?? '';
+          }
+          if (_alamatController.text.isEmpty) {
+            _alamatController.text =
+                LayananLokasi.alamatPengirimanPilihan ?? '';
+          }
+        }
+        if (_namaController.text.isNotEmpty) {
+          LayananLokasi.namaPenerimaPilihan ??= _namaController.text;
+        }
+        if (_alamatController.text.isNotEmpty) {
+          LayananLokasi.alamatPengirimanPilihan ??= _alamatController.text;
         }
         _daftarKurir = kurir.where((item) => item.aktif).toList();
         _daftarMetode = metode.where((item) => item.aktif).toList();
@@ -251,26 +300,40 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
       });
       _statusLokasi.value = hasil != null
           ? 'Alamat diambil dari lokasi perangkat'
-          : 'Alamat terdekat tidak ditemukan; koordinat perangkat ditampilkan.';
+          : 'Layanan alamat tidak terjangkau; koordinat perangkat ditampilkan. Coba lagi.';
       _bersihkanGalatKolom();
     } on LayananLokasiException catch (galat) {
-      if (mounted) tampilkanGalat(context, GalatApi.umum(galat.pesan));
-    } catch (_) {
       if (mounted) {
-        tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
+        _statusLokasi.value = galat.pesan;
+        tampilkanGalat(context, GalatApi.umum(galat.pesan));
+      }
+    } catch (e) {
+      if (mounted) {
+        final pesan =
+            'Lokasi gagal diambil ($e). Pastikan GPS aktif atau ketuk langsung di peta.';
+        _statusLokasi.value = pesan;
+        tampilkanGalat(context, GalatApi.umum(pesan));
       }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
   }
 
+  void _saatNamaDiubah(String nilai) {
+    _bersihkanGalatKolom();
+    final teks = nilai.trim();
+    LayananLokasi.namaPenerimaPilihan = teks.isEmpty ? null : teks;
+  }
+
   /// Mode manual: tiap ketikan di-debounce lalu di-geocode, sehingga peta
   /// mengikuti alamat yang sedang diketik.
   void _saatAlamatDiubah(String nilai) {
     _bersihkanGalatKolom();
+    final teks = nilai.trim();
+    LayananLokasi.alamatPengirimanPilihan = teks.isEmpty ? null : teks;
+
     _jedaGeocoding?.cancel();
     final urutan = ++_urutanGeocoding;
-    final teks = nilai.trim();
 
     if (teks.length < 10) {
       _statusLokasi.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
@@ -289,8 +352,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     if (!mounted || urutan != _urutanGeocoding) return;
 
     if (hasil == null) {
-      _statusLokasi.value =
-          'Alamat belum ditemukan di peta. Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
+      _statusLokasi.value = 'Alamat belum ditemukan di peta (atau layanan alamat tidak terjangkau). Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
       return;
     }
 
@@ -298,6 +360,38 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     setState(() => _titikPeta = titik);
     _statusLokasi.value = 'Peta menampilkan: ${hasil.alamat}';
     await _geserPetaKe(titik, 16);
+  }
+
+  /// Mode **ketuk peta**: titik yang dipilih pengguna di-reverse geocode
+  /// menjadi alamat, lalu alamat itu mengisi kolom alamat penerima.
+  Future<void> _saatPetaDiklik(LatLng titik) async {
+    // Ketikan manual yang masih tertunda dibatalkan agar tidak menimpa
+    // hasil pilihan dari peta.
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+
+    // Pin pindah dulu supaya pengguna langsung melihat titik pilihannya,
+    // kamera tidak digeser karena titiknya memang sudah di layar.
+    setState(() => _titikPeta = titik);
+    _statusLokasi.value = 'Membaca alamat titik yang dipilih di peta...';
+
+    final hasil = await _geocoding.balikArah(
+      lintang: titik.latitude,
+      bujur: titik.longitude,
+    );
+    if (!mounted || urutan != _urutanGeocoding) return;
+
+    if (hasil == null) {
+      _statusLokasi.value = 'Alamat titik ini belum terbaca (layanan alamat tidak terjangkau). Ketuk lagi, atau tulis manual.';
+      return;
+    }
+
+    setState(() {
+      _alamatController.text = hasil.alamat;
+      LayananLokasi.alamatPengirimanPilihan = hasil.alamat;
+    });
+    _bersihkanGalatKolom();
+    _statusLokasi.value = 'Alamat dari titik yang dipilih di peta';
   }
 
   /// Menggeser kamera peta ke [tujuan] dengan animasi (ease-out ±700 ms).
@@ -358,7 +452,10 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     if (!(_kunciForm.currentState?.validate() ?? false)) return;
 
     if (_kurirTerpilihId == null || _metodeTerpilih == null) {
-      tampilkanGalat(context, GalatApi.umum('Pilih kurir dan metode pembayaran dulu.'));
+      tampilkanGalat(
+        context,
+        GalatApi.umum('Pilih kurir dan metode pembayaran dulu.'),
+      );
       return;
     }
 
@@ -378,15 +475,13 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
       );
 
       if (!mounted) return;
-      LayananLokasi.alamatPengirimanPilihan =
-          _alamatController.text.trim();
+      LayananLokasi.alamatPengirimanPilihan = _alamatController.text.trim();
+      LayananLokasi.namaPenerimaPilihan = _namaController.text.trim();
 
       // 201 → Rincian Pesanan dengan tumpukan dibersihkan (PRD 7.1)
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => HalamanDetailPesanan(
-            pesananId: pesanan.id,
-          ),
+          builder: (context) => HalamanDetailPesanan(pesananId: pesanan.id),
         ),
       );
     } on GalatApi catch (g) {
@@ -448,17 +543,13 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
         return const TampilanMuat(pesan: 'Menyiapkan halaman checkout...');
 
       case KeadaanMuat.galat:
-        return TampilanGalat(
-          galat: _galat,
-          saatCobaLagi: _muatDataAwal,
-        );
+        return TampilanGalat(galat: _galat, saatCobaLagi: _muatDataAwal);
 
       case KeadaanMuat.kosong:
         return TampilanKosong(
           ikon: Icons.shopping_bag_outlined,
           judul: 'Keranjang Belanja Kosong',
-          pesan:
-              'Tidak ada menu yang bisa dicheckout. Pilih menu dulu sebelum memesan.',
+          pesan: 'Tidak ada menu yang bisa dicheckout. Pilih menu dulu sebelum memesan.',
           teksAksi: 'Pilih Menu Sekarang',
           saatAksiDitekan: _kembaliKeKatalog,
         );
@@ -517,8 +608,11 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
         children: [
           Row(
             children: [
-              Icon(Icons.access_time_rounded,
-                  size: 20, color: TemaWarna.cokelatUtama),
+              Icon(
+                Icons.access_time_rounded,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
               SizedBox(width: 8),
               Text(
                 'Jam Operasional Toko',
@@ -542,10 +636,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
           SizedBox(height: 4),
           Text(
             'Pesanan di luar rentang jam operasional akan ditolak oleh sistem.',
-            style: TextStyle(
-              fontSize: 12,
-              color: TemaWarna.teksSekunder,
-            ),
+            style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
       ),
@@ -564,15 +655,15 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
         children: [
           const Row(
             children: [
-              Icon(Icons.location_on_outlined,
-                  size: 20, color: TemaWarna.cokelatUtama),
+              Icon(
+                Icons.location_on_outlined,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
               SizedBox(width: 8),
               Text(
                 'Alamat Pengiriman',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -591,7 +682,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
               if (teks.length < 3) return 'Nama penerima terlalu pendek';
               return null;
             },
-            onChanged: (_) => _bersihkanGalatKolom(),
+            onChanged: _saatNamaDiubah,
           ),
           const SizedBox(height: 12),
           TextFormField(
@@ -614,8 +705,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed:
-                _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
+            onPressed: _sedangKirim || _sedangAmbilLokasi ? null : _ambilLokasi,
             icon: _sedangAmbilLokasi
                 ? const SizedBox(
                     width: 18,
@@ -624,7 +714,9 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
                   )
                 : const Icon(Icons.my_location_rounded),
             label: Text(
-              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi otomatis',
+              _sedangAmbilLokasi
+                  ? 'Mengambil lokasi...'
+                  : 'Ambil lokasi otomatis',
             ),
           ),
           const SizedBox(height: 8),
@@ -653,6 +745,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
                 options: MapOptions(
                   initialCenter: const LatLng(-7.9666, 112.6326),
                   initialZoom: 14,
+                  // Ketuk peta → titik itu dijadikan alamat penerima.
+                  onTap: (posisi, titik) => _saatPetaDiklik(titik),
                   onMapReady: () {
                     _petaSiap = true;
                     final target = _targetPeta;
@@ -669,6 +763,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
                   TileLayer(
                     urlTemplate:
                         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    // Cadangan bila tile utama gagal/rate-limit.
+                    fallbackUrl: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                     userAgentPackageName: 'com.example.makanyuk',
                   ),
                   if (_titikPeta != null)
@@ -693,7 +789,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
           ),
           const SizedBox(height: 8),
           const Text(
-            'Peta mengikuti alamat yang Anda ketik, atau alamat dari lokasi perangkat bila tombol di atas ditekan.',
+            'Ketuk titik mana pun di peta untuk memilih alamat, atau ketik alamat agar peta mengikuti. Bisa juga ambil dari lokasi perangkat.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
@@ -701,10 +797,15 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     );
   }
 
-  InputDecoration _dekorasiInput({required String label, required String hint}) {
+  InputDecoration _dekorasiInput({
+    required String label,
+    required String hint,
+  }) {
     // Pesan galat 422 dari server tampil tepat di bawah kolomnya
-    final galat = _galatPerKolom[
-        label == 'Nama Penerima' ? 'nama_penerima' : 'alamat_penerima'];
+    final galat =
+        _galatPerKolom[label == 'Nama Penerima'
+            ? 'nama_penerima'
+            : 'alamat_penerima'];
 
     return InputDecoration(
       labelText: label,
@@ -825,10 +926,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             ),
             Text(
               formatRupiah(kurir.tarif),
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
             const SizedBox(width: 8),
             Icon(
@@ -920,10 +1018,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
               minHeight: 2,
             )
           else ...[
-            _barisRincian(
-              'Subtotal Produk',
-              formatRupiah(ringkasan.subtotal),
-            ),
+            _barisRincian('Subtotal Produk', formatRupiah(ringkasan.subtotal)),
             _barisRincian(
               'Biaya Pengiriman',
               ringkasan.ongkosKirim == null
@@ -933,9 +1028,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
             const Divider(height: 20),
             _barisRincian(
               'Total Pembayaran',
-              ringkasan.total == null
-                  ? '—'
-                  : formatRupiah(ringkasan.total!),
+              ringkasan.total == null ? '—' : formatRupiah(ringkasan.total!),
               tebal: true,
             ),
           ],
@@ -978,8 +1071,10 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
               DropdownButton<String>(
                 isExpanded: true,
                 itemHeight: null,
-                value: _daftarMetode
-                        .any((metode) => metode.kode == _metodeTerpilih)
+                value:
+                    _daftarMetode.any(
+                      (metode) => metode.kode == _metodeTerpilih,
+                    )
                     ? _metodeTerpilih
                     : _daftarMetode.first.kode,
                 underline: const SizedBox(),
@@ -1075,7 +1170,8 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: tebal ? FontWeight.w800 : FontWeight.w600,
-                color: warnaNilai ??
+                color:
+                    warnaNilai ??
                     (tebal ? TemaWarna.cokelatUtama : TemaWarna.teksUtama),
               ),
             ),
@@ -1085,4 +1181,3 @@ class _HalamanCheckoutState extends State<HalamanCheckout>
     );
   }
 }
-
