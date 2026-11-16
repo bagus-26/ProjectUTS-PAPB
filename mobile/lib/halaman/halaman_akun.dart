@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
+import '../layanan/layanan_geocoding.dart';
 import '../layanan/layanan_lokasi.dart';
 import '../umum/tema_warna.dart';
 
@@ -21,10 +26,38 @@ class _HalamanAkunState extends State<HalamanAkun> {
   String? _galat;
   bool _memuat = true;
 
+  final TextEditingController _alamatController = TextEditingController();
+  final MapController _mapController = MapController();
+  final LayananGeocoding _geocoding = const LayananGeocoding();
+
+  /// Status peta (memuat, hasil geocoding, atau galat) tampil di atas peta.
+  final ValueNotifier<String> _statusPeta =
+      ValueNotifier<String>('Peta alamat pengiriman');
+
+  bool _sedangAmbilLokasi = false;
+
+  /// Peta baru bisa digerakkan setelah widget-nya terpasang; bila belum,
+  /// target disimpan dulu di [_targetPeta] lalu diterapkan saat peta siap.
+  bool _petaSiap = false;
+  LatLng? _titikPeta;
+  LatLng? _targetPeta;
+
+  /// Jeda debounce ketikan manual; Nominatim membatasi ±1 permintaan/detik.
+  Timer? _jedaGeocoding;
+  int _urutanGeocoding = 0;
+
   @override
   void initState() {
     super.initState();
     _muatRingkasan();
+  }
+
+  @override
+  void dispose() {
+    _jedaGeocoding?.cancel();
+    _alamatController.dispose();
+    _statusPeta.dispose();
+    super.dispose();
   }
 
   Future<void> _muatRingkasan() async {
@@ -43,8 +76,20 @@ class _HalamanAkunState extends State<HalamanAkun> {
           _nama = pesananTerakhir.namaPenerima;
           _alamat ??= pesananTerakhir.alamatPenerima;
         }
+        if (_alamatController.text.trim().isEmpty && _alamat != null) {
+          _alamatController.text = _alamat!;
+        }
         _memuat = false;
       });
+
+      // Peta langsung menampilkan lokasi alamat yang sudah tersimpan,
+      // sehingga pin mengikuti alamat sejak halaman dibuka.
+      final alamatAwal = _alamatController.text.trim();
+      if (alamatAwal.length >= 10) {
+        _jedaGeocoding?.cancel();
+        final urutan = ++_urutanGeocoding;
+        unawaited(_cariAlamatDiPeta(alamatAwal, urutan));
+      }
     } on GalatApi catch (galat) {
       if (!mounted) return;
       setState(() {
@@ -60,114 +105,104 @@ class _HalamanAkunState extends State<HalamanAkun> {
     }
   }
 
-  Future<void> _pilihAlamat() async {
-    final controller = TextEditingController(
-      text: LayananLokasi.alamatPengirimanPilihan ?? _alamat ?? '',
-    );
-    String? galat;
-    var mengambilLokasi = false;
-    final hasil = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, ubahDialog) => AlertDialog(
-          title: const Text('Alamat untuk checkout'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                minLines: 2,
-                maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Alamat pengiriman',
-                  hintText: 'Lengkapi jalan, nomor rumah, dan patokan',
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: mengambilLokasi
-                      ? null
-                      : () async {
-                          ubahDialog(() {
-                            mengambilLokasi = true;
-                            galat = null;
-                          });
-                          try {
-                            controller.text = await const LayananLokasi()
-                                .ambilKoordinatSaatIni();
-                          } on LayananLokasiException catch (error) {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() => galat = error.pesan);
-                            }
-                          } catch (_) {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() {
-                                galat =
-                                    'Lokasi tidak dapat diambil. Coba lagi.';
-                              });
-                            }
-                          } finally {
-                            if (dialogContext.mounted) {
-                              ubahDialog(() => mengambilLokasi = false);
-                            }
-                          }
-                        },
-                  icon: mengambilLokasi
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.my_location_rounded),
-                  label: Text(
-                    mengambilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi',
-                  ),
-                ),
-              ),
-              const Text(
-                'Koordinat perangkat bukan alamat lengkap. Lengkapi detail pengiriman sebelum checkout.',
-                style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
-              ),
-              if (galat != null) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    galat!,
-                    style: const TextStyle(color: TemaWarna.merahHabis),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().isEmpty) {
-                  ubahDialog(() => galat = 'Alamat pengiriman wajib diisi.');
-                  return;
-                }
-                Navigator.of(dialogContext).pop(controller.text.trim());
-              },
-              child: const Text('Gunakan alamat'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
+  /// Mode **otomatis**: ambil lokasi perangkat lalu tampilkan alamatnya
+  /// (reverse geocoding), bukan koordinat mentah.
+  Future<void> _ambilLokasiPerangkat() async {
+    if (_sedangAmbilLokasi) return;
 
-    if (hasil != null && mounted) {
+    // Pencarian manual yang masih tertunda dibatalkan agar tidak menimpa
+    // hasil lokasi perangkat.
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+
+    setState(() => _sedangAmbilLokasi = true);
+    _statusPeta.value = 'Mengambil lokasi perangkat...';
+
+    try {
+      final posisi = await const LayananLokasi().ambilPosisiSaatIni();
+      if (!mounted || urutan != _urutanGeocoding) return;
+
+      final titik = LatLng(posisi.latitude, posisi.longitude);
+      setState(() => _titikPeta = titik);
+      _geserPetaKe(titik, 16);
+      _statusPeta.value = 'Mencari alamat dari lokasi perangkat...';
+
+      final hasil = await _geocoding.balikArah(
+        lintang: titik.latitude,
+        bujur: titik.longitude,
+      );
+      if (!mounted || urutan != _urutanGeocoding) return;
+
+      final alamat =
+          hasil?.alamat ??
+          'Lokasi perangkat: ${titik.latitude.toStringAsFixed(6)}, '
+              '${titik.longitude.toStringAsFixed(6)}';
       setState(() {
-        _alamat = hasil;
-        LayananLokasi.alamatPengirimanPilihan = hasil;
+        _alamat = alamat;
+        _alamatController.text = alamat;
+        LayananLokasi.alamatPengirimanPilihan = alamat;
       });
+      _statusPeta.value = hasil != null
+          ? 'Alamat diambil dari lokasi perangkat'
+          : 'Alamat terdekat tidak ditemukan; koordinat perangkat ditampilkan.';
+    } on LayananLokasiException catch (galat) {
+      _statusPeta.value = galat.pesan;
+    } catch (_) {
+      _statusPeta.value = 'Lokasi tidak dapat diambil. Coba lagi.';
+    } finally {
+      if (mounted) setState(() => _sedangAmbilLokasi = false);
+    }
+  }
+
+  /// Mode **manual**: alamat disimpan tiap ketikan lalu peta di-geocode
+  /// setelah jeda, sehingga peta mengikuti alamat yang diketik.
+  void _saatAlamatDiubah(String nilai) {
+    final teks = nilai.trim();
+    setState(() {
+      _alamat = teks.isEmpty ? null : teks;
+      LayananLokasi.alamatPengirimanPilihan = teks.isEmpty ? null : teks;
+    });
+
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+
+    if (teks.length < 10) {
+      _statusPeta.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
+      return;
+    }
+
+    _jedaGeocoding = Timer(
+      const Duration(milliseconds: 900),
+      () => _cariAlamatDiPeta(teks, urutan),
+    );
+  }
+
+  Future<void> _cariAlamatDiPeta(String teks, int urutan) async {
+    _statusPeta.value = 'Mencari lokasi alamat di peta...';
+    final hasil = await _geocoding.cariAlamat(teks);
+    if (!mounted || urutan != _urutanGeocoding) return;
+
+    if (hasil == null) {
+      _statusPeta.value =
+          'Alamat belum ditemukan di peta. Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
+      return;
+    }
+
+    final titik = LatLng(hasil.lintang, hasil.bujur);
+    setState(() => _titikPeta = titik);
+    _geserPetaKe(titik, 16);
+    _statusPeta.value = 'Peta menampilkan: ${hasil.alamat}';
+  }
+
+  /// Menggerakkan peta ke [titik]; bila peta belum terpasang, targetnya
+  /// diterapkan lewat `onMapReady`.
+  void _geserPetaKe(LatLng titik, double zoom) {
+    _targetPeta = titik;
+    if (!_petaSiap) return;
+    try {
+      _mapController.move(titik, zoom);
+    } catch (_) {
+      // Peta belum siap; target diterapkan saat onMapReady dipanggil.
     }
   }
 
@@ -304,17 +339,14 @@ class _HalamanAkunState extends State<HalamanAkun> {
           ),
         ),
         const SizedBox(height: 16),
+
+        // Alamat pengiriman + peta inline (tanpa popup).
+        _kartuAlamat(),
+        const SizedBox(height: 16),
         Card(
           color: Colors.white,
           child: Column(
             children: [
-              _menu(
-                ikon: Icons.location_on_outlined,
-                judul: 'Alamat pengiriman',
-                keterangan: 'Pilih alamat atau gunakan lokasi perangkat',
-                saatDitekan: _pilihAlamat,
-              ),
-              const Divider(height: 1, indent: 64),
               _menu(
                 ikon: Icons.payment_outlined,
                 judul: 'Metode pembayaran',
@@ -338,6 +370,156 @@ class _HalamanAkunState extends State<HalamanAkun> {
           style: TextStyle(color: TemaWarna.teksSekunder, fontSize: 12),
         ),
       ],
+    );
+  }
+
+  /// Kartu alamat: input manual + tombol lokasi otomatis, dengan peta
+  /// yang tampil tepat di bawahnya dan mengikuti alamat yang dipilih.
+  Widget _kartuAlamat() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.location_on_outlined,
+                size: 20,
+                color: TemaWarna.cokelatUtama,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Alamat Pengiriman',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _alamatController,
+            minLines: 2,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: 'Alamat pengiriman',
+              hintText: 'Contoh: Jl. Mawar No. 12, Klojen, Kota Malang',
+              filled: true,
+              fillColor: TemaWarna.abuMuda,
+              labelStyle: const TextStyle(
+                fontSize: 13,
+                color: TemaWarna.teksSekunder,
+              ),
+              hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: TemaWarna.garisAbu),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: TemaWarna.garisAbu),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: TemaWarna.cokelatUtama,
+                  width: 1.5,
+                ),
+              ),
+            ),
+            onChanged: _saatAlamatDiubah,
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _sedangAmbilLokasi ? null : _ambilLokasiPerangkat,
+            icon: _sedangAmbilLokasi
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location_rounded),
+            label: Text(
+              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi otomatis',
+            ),
+          ),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<String>(
+            valueListenable: _statusPeta,
+            builder: (context, teks, _) => Text(
+              teks,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: TemaWarna.teksSekunder,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Peta inline di bawah alamat pengiriman (Leaflet/OpenStreetMap).
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 200,
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: const LatLng(-7.9666, 112.6326),
+                  initialZoom: 14,
+                  onMapReady: () {
+                    _petaSiap = true;
+                    final target = _targetPeta;
+                    if (target != null) {
+                      try {
+                        _mapController.move(target, 16);
+                      } catch (_) {
+                        // Peta belum benar-benar siap; biarkan apa adanya.
+                      }
+                    }
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.makanyuk',
+                  ),
+                  if (_titikPeta != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _titikPeta!,
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.topCenter,
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 44,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ketik alamat manual agar peta mengikuti, atau ambil alamat otomatis dari lokasi perangkat.',
+            style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
+          ),
+        ],
+      ),
     );
   }
 

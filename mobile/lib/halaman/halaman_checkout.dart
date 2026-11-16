@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../layanan/galat_api.dart';
 import '../layanan/layanan_api.dart';
+import '../layanan/layanan_geocoding.dart';
 import '../layanan/layanan_lokasi.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -38,7 +41,8 @@ class HalamanCheckout extends StatefulWidget {
   State<HalamanCheckout> createState() => _HalamanCheckoutState();
 }
 
-class _HalamanCheckoutState extends State<HalamanCheckout> {
+class _HalamanCheckoutState extends State<HalamanCheckout>
+    with SingleTickerProviderStateMixin {
   final LayananApi _layanan = LayananApi();
   final GlobalKey<FormState> _kunciForm = GlobalKey<FormState>();
   final TextEditingController _namaController = TextEditingController();
@@ -65,7 +69,29 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   bool _sedangKirim = false;
   bool _sedangAmbilLokasi = false;
   final MapController _mapController = MapController();
-  final ValueNotifier<String> _statusLokasi = ValueNotifier<String>('Mengambil lokasi...');
+  final ValueNotifier<String> _statusLokasi =
+      ValueNotifier<String>('Peta lokasi pengiriman');
+
+  /// Geocoding OpenStreetMap: koordinat → alamat (otomatis) dan
+  /// alamat → koordinat (manual, peta mengikuti ketikan).
+  final LayananGeocoding _geocoding = const LayananGeocoding();
+
+  /// Jeda debounce ketikan manual; Nominatim membatasi ±1 permintaan/detik.
+  Timer? _jedaGeocoding;
+  int _urutanGeocoding = 0;
+
+  /// Titik pin di peta inline; `null` selama lokasi belum pernah diambil.
+  LatLng? _titikPeta;
+
+  /// Peta baru bisa digerakkan setelah widget-nya terpasang; bila belum,
+  /// target disimpan dulu di [_targetPeta] lalu diterapkan saat peta siap.
+  bool _petaSiap = false;
+  LatLng? _targetPeta;
+
+  /// Kontroler animasi kamera. `MapController.move()` di flutter_map tidak
+  /// beranimasi (langsung loncat), jadi kamera di-tween tiap frame supaya
+  /// peta bergeser halus ke lokasi pengguna.
+  AnimationController? _animasiKamera;
   bool _sedangSegarkanRingkasan = false;
 
   /// Pesan galat 422 per kolom (PRD 7.3) untuk ditampilkan di bawah input.
@@ -79,8 +105,11 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 
   @override
   void dispose() {
+    _jedaGeocoding?.cancel();
     _namaController.dispose();
     _alamatController.dispose();
+    _animasiKamera?.dispose();
+    _animasiKamera = null;
     super.dispose();
   }
 
@@ -131,6 +160,15 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
         _keranjang = isi;
         _keadaan = isi.kosong ? KeadaanMuat.kosong : KeadaanMuat.berhasil;
       });
+
+      // Peta langsung menampilkan lokasi alamat yang sudah tersimpan,
+      // sehingga pin mengikuti alamat sejak halaman dibuka.
+      final alamatAwal = _alamatController.text.trim();
+      if (alamatAwal.length >= 10) {
+        _jedaGeocoding?.cancel();
+        final urutan = ++_urutanGeocoding;
+        unawaited(_cariAlamatDiPeta(alamatAwal, urutan));
+      }
     } on GalatApi catch (g) {
       if (!mounted) return;
       setState(() {
@@ -173,52 +211,144 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
 
   Future<void> _ambilLokasi() async {
     if (_sedangAmbilLokasi) return;
-    setState(() => _sedangAmbilLokasi = true);
-    _statusLokasi.value = 'Mengambil lokasi...';
 
-    final sheetController = showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: SizedBox(
-          width: 340,
-          height: 420,
-          child: _PetaLokasiSheet(controller: _mapController, status: _statusLokasi),
-        ),
-      ),
-    );
+    // Pencarian manual yang masih tertunda dibatalkan agar tidak menimpa
+    // hasil lokasi perangkat.
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+
+    setState(() => _sedangAmbilLokasi = true);
+    _statusLokasi.value = 'Mengambil lokasi perangkat...';
 
     try {
       final layanan = const LayananLokasi();
-    final posisi = await layanan.ambilPosisiSaatIni();
-    if (!mounted) return;
-    _mapController.move(LatLng(posisi.latitude, posisi.longitude), 15);
-    await Future.delayed(const Duration(seconds: 1));
-    final alamat =
-        'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, ${posisi.longitude.toStringAsFixed(6)}';
-    if (!mounted) return;
-    setState(() {
-      _alamatController.text = alamat;
-      LayananLokasi.alamatPengirimanPilihan = alamat;
-    });
-    _statusLokasi.value = alamat;
-    _bersihkanGalatKolom();
-    // Tidak menutup otomatis; pengguna menutup manual via tombol X.
+      final posisi = await layanan.ambilPosisiSaatIni();
+      if (!mounted) return;
+
+      final titik = LatLng(posisi.latitude, posisi.longitude);
+      setState(() => _titikPeta = titik);
+      _statusLokasi.value = 'Mencari alamat dari lokasi perangkat...';
+
+      // Animasi geser kamera + munculkan pin penanda.
+      await _geserPetaKe(titik, 16);
+      if (!mounted || urutan != _urutanGeocoding) return;
+
+      // Mode otomatis: isi kolom alamat dengan alamat terbaca, bukan
+      // koordinat mentah perangkat.
+      final hasil = await _geocoding.balikArah(
+        lintang: titik.latitude,
+        bujur: titik.longitude,
+      );
+      if (!mounted || urutan != _urutanGeocoding) return;
+
+      final alamat =
+          hasil?.alamat ??
+          'Lokasi perangkat: ${posisi.latitude.toStringAsFixed(6)}, '
+              '${posisi.longitude.toStringAsFixed(6)}';
+      setState(() {
+        _alamatController.text = alamat;
+        LayananLokasi.alamatPengirimanPilihan = alamat;
+      });
+      _statusLokasi.value = hasil != null
+          ? 'Alamat diambil dari lokasi perangkat'
+          : 'Alamat terdekat tidak ditemukan; koordinat perangkat ditampilkan.';
+      _bersihkanGalatKolom();
     } on LayananLokasiException catch (galat) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        tampilkanGalat(context, GalatApi.umum(galat.pesan));
-      }
+      if (mounted) tampilkanGalat(context, GalatApi.umum(galat.pesan));
     } catch (_) {
       if (mounted) {
-        Navigator.of(context).pop();
         tampilkanGalat(context, GalatApi.umum('Lokasi tidak dapat diambil. Coba lagi.'));
       }
     } finally {
       if (mounted) setState(() => _sedangAmbilLokasi = false);
     }
-    await sheetController;
+  }
+
+  /// Mode manual: tiap ketikan di-debounce lalu di-geocode, sehingga peta
+  /// mengikuti alamat yang sedang diketik.
+  void _saatAlamatDiubah(String nilai) {
+    _bersihkanGalatKolom();
+    _jedaGeocoding?.cancel();
+    final urutan = ++_urutanGeocoding;
+    final teks = nilai.trim();
+
+    if (teks.length < 10) {
+      _statusLokasi.value = 'Tulis alamat lengkap agar peta dapat mengikuti.';
+      return;
+    }
+
+    _jedaGeocoding = Timer(
+      const Duration(milliseconds: 900),
+      () => _cariAlamatDiPeta(teks, urutan),
+    );
+  }
+
+  Future<void> _cariAlamatDiPeta(String teks, int urutan) async {
+    _statusLokasi.value = 'Mencari lokasi alamat di peta...';
+    final hasil = await _geocoding.cariAlamat(teks);
+    if (!mounted || urutan != _urutanGeocoding) return;
+
+    if (hasil == null) {
+      _statusLokasi.value =
+          'Alamat belum ditemukan di peta. Tulis lebih lengkap, mis. Jl. Mawar No. 12, Malang.';
+      return;
+    }
+
+    final titik = LatLng(hasil.lintang, hasil.bujur);
+    setState(() => _titikPeta = titik);
+    _statusLokasi.value = 'Peta menampilkan: ${hasil.alamat}';
+    await _geserPetaKe(titik, 16);
+  }
+
+  /// Menggeser kamera peta ke [tujuan] dengan animasi (ease-out ±700 ms).
+  ///
+  /// flutter_map hanya menyediakan `move()` yang langsung loncat, jadi
+  /// animasinya dibuat sendiri: tiap frame center dan zoom diinterpolasi
+  /// lalu dipanggilkan ke `MapController.move()`.
+  Future<void> _geserPetaKe(LatLng tujuan, double zoom) async {
+    _targetPeta = tujuan;
+    if (!_petaSiap) return; // peta belum terpasang; tunggu `onMapReady`.
+    _animasiKamera?.dispose();
+    final animasi = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _animasiKamera = animasi;
+
+    late final LatLng awal;
+    late final double zoomAwal;
+    try {
+      awal = _mapController.camera.center;
+      zoomAwal = _mapController.camera.zoom;
+    } catch (_) {
+      // Peta sedang tidak terpasang (mis. keluar viewport) — lewati animasi;
+      // targetnya diterapkan lewat `onMapReady`.
+      if (identical(_animasiKamera, animasi)) _animasiKamera = null;
+      animasi.dispose();
+      return;
+    }
+
+    animasi.addListener(() {
+      if (!mounted) return;
+      final t = Curves.easeOutCubic.transform(animasi.value);
+      try {
+        _mapController.move(
+          LatLng(
+            awal.latitude + (tujuan.latitude - awal.latitude) * t,
+            awal.longitude + (tujuan.longitude - awal.longitude) * t,
+          ),
+          zoomAwal + (zoom - zoomAwal) * t,
+        );
+      } catch (_) {
+        // Peta terlepas saat animasi berjalan; abaikan.
+      }
+    });
+
+    await animasi.forward();
+    if (identical(_animasiKamera, animasi)) {
+      _animasiKamera = null;
+      animasi.dispose();
+    }
   }
 
   /// `POST /api/checkout` + `X-Kunci-Idempoten` (PRD 7.4).
@@ -480,7 +610,7 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
               }
               return null;
             },
-            onChanged: (_) => _bersihkanGalatKolom(),
+            onChanged: _saatAlamatDiubah,
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -494,11 +624,76 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
                   )
                 : const Icon(Icons.my_location_rounded),
             label: Text(
-              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Gunakan lokasi saya',
+              _sedangAmbilLokasi ? 'Mengambil lokasi...' : 'Ambil lokasi otomatis',
             ),
           ),
+          const SizedBox(height: 8),
+
+          // Status pengambilan lokasi (nilai awal, memuat, atau koordinat).
+          ValueListenableBuilder<String>(
+            valueListenable: _statusLokasi,
+            builder: (context, teks, _) => Text(
+              teks,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: TemaWarna.teksSekunder,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Peta inline di bawah box alamat (Leaflet/OpenStreetMap, tanpa API key).
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              height: 200,
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: const LatLng(-7.9666, 112.6326),
+                  initialZoom: 14,
+                  onMapReady: () {
+                    _petaSiap = true;
+                    final target = _targetPeta;
+                    if (target != null) {
+                      try {
+                        _mapController.move(target, 16);
+                      } catch (_) {
+                        // Peta belum benar-benar siap; biarkan apa adanya.
+                      }
+                    }
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.example.makanyuk',
+                  ),
+                  if (_titikPeta != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _titikPeta!,
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.topCenter,
+                          child: Icon(
+                            Icons.location_pin,
+                            size: 44,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           const Text(
-            'Koordinat perlu dilengkapi dengan nama jalan dan patokan alamat.',
+            'Peta mengikuti alamat yang Anda ketik, atau alamat dari lokasi perangkat bila tombol di atas ditekan.',
             style: TextStyle(fontSize: 12, color: TemaWarna.teksSekunder),
           ),
         ],
@@ -873,81 +1068,3 @@ class _HalamanCheckoutState extends State<HalamanCheckout> {
   }
 }
 
-class _PetaLokasiSheet extends StatelessWidget {
-  final MapController controller;
-  final ValueNotifier<String> status;
-  const _PetaLokasiSheet({required this.controller, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-            child: Row(
-              children: [
-                const Icon(Icons.location_on, color: Colors.brown),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: status,
-                    builder: (context, text, _) => Text(
-                      text,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Stack(
-                  children: [
-                    FlutterMap(
-                      mapController: controller,
-                      options: MapOptions(
-                        initialCenter: LatLng(-7.9666, 112.6326),
-                        initialZoom: 14,
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.example.makanyuk',
-                        ),
-                        const MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: LatLng(-7.9666, 112.6326),
-                              width: 40,
-                              height: 40,
-                              child: Icon(Icons.location_pin, color: Colors.red, size: 40),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox.shrink(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
